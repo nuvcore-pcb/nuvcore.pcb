@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NUVCORE.PCB — Autonomous Robot Agent</title>
+  <style>
+    :root {
+      --bg: #05080f;
+      --panel: #0c121e;
+      --border: #1e2d45;
+      --gold: #eab308;
+      --cyan: #22d3ee;
+      --green: #22c55e;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      margin: 0;
+      padding: 12px;
+      background: radial-gradient(circle at top, #101b2e 0%, var(--bg) 78%);
+      color: var(--text);
+    }
+    .robot-shell {
+      max-width: 1040px;
+      margin: 0 auto;
+      background: var(--panel);
+      border: 1.5px solid var(--border);
+      border-radius: 22px;
+      padding: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65);
+    }
+    .top-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 14px;
+    }
+    .top-header h1 { margin: 0; font-size: 1.25rem; color: var(--cyan); letter-spacing: 0.5px; }
+    .top-header small { color: var(--muted); font-size: 0.76rem; }
+    .badge {
+      background: #102033;
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+    }
+    .robot-stage {
+      background: linear-gradient(180deg, #090e18 0%, #0d1524 100%);
+      border: 1.5px solid #263854;
+      border-radius: 24px;
+      padding: 18px 14px;
+      margin-bottom: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .ears-row {
+      display: flex;
+      justify-content: space-between;
+      max-width: 520px;
+      margin: 0 auto 10px;
+      gap: 10px;
+    }
+    .ear-pod {
+      background: #111b2c;
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      border-radius: 12px;
+      padding: 6px 12px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .visor {
+      max-width: 440px;
+      margin: 0 auto;
+      background: #04070d;
+      border: 2px solid var(--cyan);
+      border-radius: 46px;
+      padding: 24px 20px;
+      box-shadow: 0 0 32px rgba(34, 211, 238, 0.2), inset 0 0 24px rgba(34, 211, 238, 0.08);
+      position: relative;
+    }
+    .scan-beam {
+      position: absolute;
+      left: 10%;
+      right: 10%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      top: 50%;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    .robot-stage.scanning .scan-beam { animation: scanMove 1.4s ease-in-out infinite; opacity: 0.9; }
+    @keyframes scanMove { 0%, 100% { top: 20%; } 50% { top: 80%; } }
+    .eyes {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 16px;
+    }
+    .eye {
+      width: 82px;
+      height: 36px;
+      border-radius: 18px 18px 26px 26px;
+      background: radial-gradient(circle, #67e8f9 0%, #0284c7 75%, #082f49 100%);
+      box-shadow: 0 0 22px rgba(34, 211, 238, 0.75);
+      transition: all 0.25s ease;
+    }
+    .robot-stage.thinking .eye {
+      background: radial-gradient(circle, #fde047 0%, #eab308 75%, #713f12 100%);
+      box-shadow: 0 0 22px rgba(234, 179, 8, 0.8);
+      height: 24px;
+      border-radius: 999px;
+    }
+    .mouth-wave {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 5px;
+      height: 24px;
+    }
+    .mouth-wave span {
+      width: 5px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--cyan);
+      opacity: 0.6;
+    }
+    .robot-stage.speaking .mouth-wave span,
+    .robot-stage.thinking .mouth-wave span {
+      opacity: 1;
+      animation: wave 0.65s ease-in-out infinite alternate;
+    }
+    .mouth-wave span:nth-child(2) { animation-delay: 0.1s; }
+    .mouth-wave span:nth-child(3) { animation-delay: 0.2s; }
+    .mouth-wave span:nth-child(4) { animation-delay: 0.3s; }
+    .mouth-wave span:nth-child(5) { animation-delay: 0.15s; }
+    @keyframes wave { from { height: 6px; } to { height: 22px; } }
+    .robot-caption { text-align: center; margin-top: 12px; font-size: 0.84rem; color: #cbd5e1; }
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 780px) { .cards-grid { grid-template-columns: 1fr; } }
+    .card {
+      background: #090e18;
+      border: 1px solid #22324c;
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 0.9rem; color: var(--gold); }
+    .card p { margin: 0; font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+    .meter { margin-top: 8px; height: 9px; background: #172235; border-radius: 999px; overflow: hidden; }
+    .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--gold)); transition: width 0.4s ease; }
+    .controls-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    button {
+      background: #131d2e;
+      color: var(--text);
+      border: 1px solid #33496b;
+      padding: 8px 13px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    button:hover { background: #1c2a42; }
+    button.primary { background: var(--cyan); color: #041018; border-color: var(--cyan); }
+    .panel-box {
+      background: #080d16;
+      border: 1.5px solid #253854;
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .panel-box h3 { margin: 0 0 10px; font-size: 0.92rem; color: var(--cyan); }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+    input {
+      width: 100%;
+      background: #101928;
+      border: 1px solid #2d4263;
+      color: var(--text);
+      padding: 8px 11px;
+      border-radius: 9px;
+      font-size: 0.83rem;
+    }
+    .messages {
+      background: #05080f;
+      border: 1px solid #1c2a40;
+      border-radius: 12px;
+      padding: 10px;
+      height: 230px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .msg {
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      line-height: 1.48;
+      max-width: 92%;
+      white-space: pre-wrap;
+    }
+    .msg.user { align-self: flex-end; background: #17253b; border: 1px solid var(--gold); }
+    .msg.bot { align-self: flex-start; background: #0b1c29; border: 1px solid var(--cyan); }
+    .send-row { display: flex; gap: 8px; }
+    .log {
+      background: #05080f;
+      border: 1px solid #1d2b42;
+      border-radius: 10px;
+      padding: 9px;
+      font-family: monospace;
+      font-size: 0.76rem;
+      color: #7dd3fc;
+      max-height: 110px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="robot-shell">
+    <div class="top-header">
+      <div>
+        <h1>NUVCORE.PCB</h1>
+        <small>AUTONOMOUS BUILDER &amp; PRODUCTION AGENT • GITHUB DB</small>
+      </div>
+      <div class="badge" id="statusBadge">BAZA YÜKLƏNİR...</div>
+    </div>
+
+    <div class="robot-stage" id="robotStage">
+      <div class="ears-row">
+        <div class="ear-pod">NUVCORE • GITHUB DB</div>
+        <div class="ear-pod">BUILDER + PRODUCTION</div>
+      </div>
+      <div class="visor">
+        <div class="scan-beam"></div>
+        <div class="eyes">
+          <div class="eye"></div>
+          <div class="eye"></div>
+        </div>
+        <div class="mouth-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+      <div class="robot-caption" id="robotMood">NUVCORE.PCB baza ilə sinxronlaşdırılır...</div>
+    </div>
+
+    <div class="cards-grid">
+      <div class="card">
+        <h3>1TB Yaddaş Hovuzu</h3>
+        <p id="ssdText">0 GB / 1024 GB (0%)</p>
+        <div class="meter"><div class="meter-fill" id="ssdBar"></div></div>
+      </div>
+      <div class="card">
+        <h3>Layihə Bazası (projects.json)</h3>
+        <p id="projectsCountText">Yüklənmiş layihə: 0</p>
+      </div>
+      <div class="card">
+        <h3>Son Qərar (logs.json)</h3>
+        <p id="decisionText">Gözlənilir...</p>
+      </div>
+    </div>
+
+    <div class="controls-bar">
+      <button class="primary" onclick="runCycleAndSave()">Dövr İcra Et və Bazaya Yaz</button>
+      <button onclick="loadMemoryFromRepo()">Bazadan Yenidən Oxu</button>
+      <button onclick="resetMemoryData()">Bazanı Sıfırla</button>
+    </div>
+
+    <div class="panel-box">
+      <h3>Açarlar və GitHub Baza Bağlantısı (Yalnız Bu Cihazda Saxlanır)</h3>
+      <div class="grid-2">
+        <input type="password" id="geminiKeyInput" placeholder="Gemini API Key (AI beyin üçün)" />
+        <input type="password" id="ghTokenInput" placeholder="GitHub Token (bazaya yazmaq üçün)" />
+        <input type="text" id="ghOwnerInput" placeholder="GitHub İstifadəçi Adı" />
+        <input type="text" id="ghRepoInput" placeholder="Repo Adı (nuvcore.pcb)" />
+      </div>
+      <div class="controls-bar" style="margin-bottom: 0;">
+        <button class="primary" onclick="saveConfig()">Parametrləri Saxla</button>
+        <button onclick="clearConfig()">Parametrləri Təmizlə</button>
+      </div>
+    </div>
+
+    <div class="panel-box">
+      <h3>NUVCORE.PCB — Layihə Qurucu, Kod Yazıcı və Baza Operatoru</h3>
+      <div class="messages" id="messages">
+        <div class="msg bot">Salam! Mən NUVCORE.PCB agentiyəm. Layihə strukturu qura, kod yaza və GitHub bazasına qeydlər sala bilərəm.</div>
+      </div>
+      <div class="send-row">
+        <input type="text" id="chatInput" placeholder="NUVCORE.PCB-yə əmr və ya layihə sorğusu yazın..." onkeydown="if(event.key==='Enter') sendChat()" />
+        <button class="primary" onclick="sendChat()">Göndər</button>
+      </div>
+    </div>
+
+    <div class="log" id="logBox">[INIT] NUVCORE.PCB işə düşdü...</div>
+  </div>
+
+  <script>
+    let dbLogs = { cycles: 0, used_gb: 0, max_gb: 1024, last_decision: "INIT_NUVCORE_PCB", entries: [] };
+    let dbProjects = { projects: [] };
+    let dbRules = { rules: [] };
+
+    function log(msg) {
+      const box = document.getElementById("logBox");
+      box.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + box.textContent;
+    }
+
+    function addMsg(text, role) {
+      const box = document.getElementById("messages");
+      const el = document.createElement("div");
+      el.className = "msg " + role;
+      el.textContent = text;
+      box.appendChild(el);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function setMood(cls, text) {
+      const st = document.getElementById("robotStage");
+      st.classList.remove("scanning", "thinking", "speaking");
+      if (cls) st.classList.add(cls);
+      document.getElementById("robotMood").textContent = text;
+    }
+
+    function getCfg() {
+      return {
+        geminiKey: localStorage.getItem("nuvcore_gem_key") || "",
+        ghToken: localStorage.getItem("nuvcore_gh_token") || "",
+        ghOwner: localStorage.getItem("nuvcore_gh_owner") || "",
+        ghRepo: localStorage.getItem("nuvcore_gh_repo") || "nuvcore.pcb"
+      };
+    }
+
+    function saveConfig() {
+      const gKey = document.getElementById("geminiKeyInput").value.trim();
+      const ghTok = document.getElementById("ghTokenInput").value.trim();
+      const ghOwn = document.getElementById("ghOwnerInput").value.trim();
+      const ghRep = document.getElementById("ghRepoInput").value.trim();
+
+      if (gKey) localStorage.setItem("nuvcore_gem_key", gKey);
+      if (ghTok) localStorage.setItem("nuvcore_gh_token", ghTok);
+      if (ghOwn) localStorage.setItem("nuvcore_gh_owner", ghOwn);
+      if (ghRep) localStorage.setItem("nuvcore_gh_repo", ghRep);
+
+      document.getElementById("geminiKeyInput").value = "";
+      document.getElementById("ghTokenInput").value = "";
+      refreshBadge();
+      log("CONFIG: NUVCORE.PCB parametrləri cihazda saxlandı.");
+    }
+
+    function clearConfig() {
+      ["nuvcore_gem_key", "nuvcore_gh_token", "nuvcore_gh_owner", "nuvcore_gh_repo"].forEach(k => localStorage.removeItem(k));
+      refreshBadge();
+      log("CONFIG: Saxlanmış parametrlər silindi.");
+    }
+
+    function refreshBadge() {
+      const cfg = getCfg();
+      const aiTxt = cfg.geminiKey ? "Gemini AI" : "Lokal";
+      const dbTxt = (cfg.ghToken && cfg.ghOwner && cfg.ghRepo) ? "GitHub Yazma Aktiv" : "GitHub Oxuma";
+      document.getElementById("statusBadge").textContent = `NUVCORE.PCB • ${aiTxt} • ${dbTxt}`;
+      document.getElementById("ghOwnerInput").value = cfg.ghOwner;
+      document.getElementById("ghRepoInput").value = cfg.ghRepo;
+    }
+
+    function renderStats() {
+      const used = dbLogs.used_gb || 0;
+      const max = dbLogs.max_gb || 1024;
+      const pct = ((used / max) * 100).toFixed(2);
+      document.getElementById("ssdText").textContent = `${used} GB / ${max} GB (${pct}%) • Dövr: ${dbLogs.cycles || 0}`;
+      document.getElementById("ssdBar").style.width = pct + "%";
+      document.getElementById("projectsCountText").textContent = `Yüklənmiş layihə: ${(dbProjects.projects || []).length}`;
+      document.getElementById("decisionText").textContent = dbLogs.last_decision || "READY";
+    }
+
+    async function loadMemoryFromRepo() {
+      setMood("scanning", "NUVCORE.PCB GitHub bazasını oxuyur...");
+      try {
+        const [rLogs, rProj, rRules] = await Promise.all([
+          fetch("./memory/logs.json?t=" + Date.now()),
+          fetch("./memory/projects.json?t=" + Date.now()),
+          fetch("./memory/rules.json?t=" + Date.now())
+        ]);
+        if (rLogs.ok) dbLogs = await rLogs.json();
+        if (rProj.ok) dbProjects = await rProj.json();
+        if (rRules.ok) dbRules = await rRules.json();
+        renderStats();
+        setMood("", "NUVCORE.PCB bazası sinxronlaşdırıldı.");
+        log("DB READ: memory/ faylları oxundu.");
+      } catch {
+        renderStats();
+        setMood("", "Lokal baza rejimi aktivdir.");
+        log("DB READ: memory/ faylları tapılmadı, daxili vəziyyət işləyir.");
+      }
+    }
+
+    async function writeJsonToGithub(filePath, obj, commitMsg) {
+      const cfg = getCfg();
+      if (!cfg.ghToken || !cfg.ghOwner || !cfg.ghRepo) {
+        log(`DB SKIP (${filePath}): GitHub Token/Owner/Repo daxil edilməyib.`);
+        return false;
+      }
+
+      const apiUrl = `https://api.github.com/repos/${encodeURIComponent(cfg.ghOwner)}/${encodeURIComponent(cfg.ghRepo)}/contents/${filePath}`;
+      let sha = null;
+
+      try {
+        const getRes = await fetch(apiUrl, { headers: { Authorization: `Bearer ${cfg.ghToken}` } });
+        if (getRes.ok) {
+          const existing = await getRes.json();
+          sha = existing.sha;
+        }
+      } catch {}
+
+      const jsonStr = JSON.stringify(obj, null, 2);
+      const base64Content = btoa(unescape(encodeURIComponent(jsonStr)));
+
+      const putRes = await fetch(apiUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${cfg.ghToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: commitMsg,
+          content: base64Content,
+          ...(sha ? { sha } : {})
+        })
+      });
+
+      if (putRes.ok) {
+        log(`DB WRITE OK: ${filePath} yeniləndi.`);
+        return true;
+      } else {
+        const errData = await putRes.json().catch(() => ({}));
+        log(`DB WRITE ERR (${filePath}): ${errData.message || putRes.status}`);
+        return false;
+      }
+    }
+
+    async function runCycleAndSave() {
+      dbLogs.cycles = (dbLogs.cycles || 0) + 1;
+      dbLogs.used_gb = Math.min(1024, +((dbLogs.used_gb || 0) + 6.4).toFixed(1));
+      dbLogs.last_decision = `NUVCORE_CYCLE_${dbLogs.cycles}`;
+      dbLogs.entries = dbLogs.entries || [];
+      dbLogs.entries.unshift({
+        time: new Date().toISOString(),
+        agent: "NUVCORE.PCB",
+        action: "CYCLE_RUN",
+        cycles: dbLogs.cycles,
+        used_gb: dbLogs.used_gb
+      });
+      if (dbLogs.entries.length > 50) dbLogs.entries.length = 50;
+
+      renderStats();
+      setMood("scanning", `NUVCORE.PCB dövr #${dbLogs.cycles} icra edir...`);
+      await writeJsonToGithub("memory/logs.json", dbLogs, `nuvcore.pcb: cycle #${dbLogs.cycles}`);
+      setTimeout(() => setMood("", `Dövr #${dbLogs.cycles} tamamlandı.`), 1000);
+    }
+
+    async function resetMemoryData() {
+      dbLogs = { cycles: 0, used_gb: 0, max_gb: 1024, last_decision: "RESET_NUVCORE_PCB", entries: [] };
+      renderStats();
+      await writeJsonToGithub("memory/logs.json", dbLogs, "nuvcore.pcb: reset logs");
+      log("DB RESET: logs.json sıfırlandı.");
+    }
+
+    async function sendChat() {
+      const inp = document.getElementById("chatInput");
+      const text = inp.value.trim();
+      if (!text) return;
+      inp.value = "";
+      addMsg(text, "user");
+
+      const cfg = getCfg();
+      if (!cfg.geminiKey) {
+        addMsg("Gemini API Key daxil edilməyib. Yuxarıdakı xanaya Gemini API Key daxil edin.", "bot");
+        return;
+      }
+
+      setMood("thinking", "NUVCORE.PCB analiz edir və kod/plan hazırlayır...");
+      const rulesTxt = (dbRules.rules || []).join(" | ");
+      const projTxt = (dbProjects.projects || []).map(p => p.name).join(", ");
+
+      const prompt =
+        `Sən NUVCORE.PCB avtonom layihə qurucu, kod yazıcı və istehsal agentisən. ` +
+        `Azərbaycan dilində cavab ver. Qaydalar: ${rulesTxt}. Mövcud layihələr: ${projTxt || "yoxdur"}. ` +
+        `İstifadəçi sorğusu: ${text}\n` +
+        `Əgər layihə və ya kod istənirsə, əvvəl qısa fayl planı ver, sonra tam işlək kod yaz.`;
+
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(cfg.geminiKey)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+          }
+        );
+        const data = await res.json();
+        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || data?.error?.message || "Cavab alınmadı.";
+        setMood("speaking", "NUVCORE.PCB cavab hazırladı.");
+        addMsg(reply, "bot");
+
+        dbLogs.last_decision = `NUVCORE_TASK: ${text.slice(0, 42)}`;
+        dbLogs.entries = dbLogs.entries || [];
+        dbLogs.entries.unshift({
+          time: new Date().toISOString(),
+          agent: "NUVCORE.PCB",
+          prompt: text.slice(0, 200),
+          summary: reply.slice(0, 300)
+        });
+        if (dbLogs.entries.length > 50) dbLogs.entries.length = 50;
+        renderStats();
+        await writeJsonToGithub("memory/logs.json", dbLogs, "nuvcore.pcb: log task");
+      } catch {
+        setMood("", "Bağlantı xətası baş verdi.");
+        addMsg("API sorğusu zamanı xəta baş verdi.", "bot");
+      }
+    }
+
+    refreshBadge();
+    loadMemoryFromRepo();
+  </script>
+</body>
+</html>
