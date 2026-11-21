@@ -1,0 +1,534 @@
+<script>
+  function logMsg(msg, type = "") {
+    const box = document.getElementById("consoleLog");
+    if (!box) return;
+    const line = document.createElement("div");
+    if (type) line.className = type;
+    line.textContent = "[" + new Date().toLocaleTimeString() + "] " + msg;
+    box.prepend(line);
+  }
+
+  function setStatus(text, isErr = false) {
+    const st = document.getElementById("sysStatus");
+    if (!st) return;
+    st.textContent = text;
+    st.className = isErr ? "badge err" : "badge";
+  }
+
+  window.onerror = function (message, source, lineno) {
+    setStatus("XƏTA: Sətir " + lineno, true);
+    logMsg("JS XƏTA (" + lineno + "): " + message, "log-err");
+  };
+
+  window.addEventListener("unhandledrejection", function (ev) {
+    setStatus("PROMISE XƏTASI", true);
+    const reasonMsg = ev && ev.reason && ev.reason.message ? ev.reason.message : String(ev.reason || "Naməlum xəta");
+    logMsg("ASYNC XƏTA: " + reasonMsg, "log-err");
+  });
+
+  const loadedPlugins = {};
+  const dbState = {
+    projects: { sha: null, items: [], raw: null },
+    rules: { sha: null, data: null },
+    logs: { sha: null, items: [], raw: null },
+    plugins: []
+  };
+
+  const NUVCORE_API = {
+    log: (msg, type = "") => logMsg("[PLUGIN] " + msg, type),
+    getLidar: () => updateTelemetry(),
+    getProjects: () => dbState.projects.items,
+    addLog: (entry) => appendLog(entry),
+    registerAction: (name, fn) => {
+      loadedPlugins[name] = fn;
+      logMsg("Yeni əlavə funksiya qeydə alındı: " + name);
+    }
+  };
+
+  function getApiKey() {
+    const inputEl = document.getElementById("aiApiKey");
+    return (inputEl && inputEl.value.trim()) || localStorage.getItem("nuv_aikey") || "";
+  }
+
+  function getGhConfig() {
+    const owner = (document.getElementById("ghOwner")?.value || "").trim() || localStorage.getItem("nuv_owner") || "al-capilot";
+    const repo = (document.getElementById("ghRepo")?.value || "").trim() || localStorage.getItem("nuv_repo") || "robot";
+    const token = (document.getElementById("ghToken")?.value || "").trim() || localStorage.getItem("nuv_token") || "";
+    return { owner, repo, token };
+  }
+
+  function loadSettings() {
+    if (document.getElementById("ghOwner")) document.getElementById("ghOwner").value = localStorage.getItem("nuv_owner") || "al-capilot";
+    if (document.getElementById("ghRepo")) document.getElementById("ghRepo").value = localStorage.getItem("nuv_repo") || "robot";
+    if (document.getElementById("ghToken")) document.getElementById("ghToken").value = localStorage.getItem("nuv_token") || "";
+    if (document.getElementById("aiApiKey")) document.getElementById("aiApiKey").value = localStorage.getItem("nuv_aikey") || "";
+  }
+
+  function saveSettings() {
+    const owner = (document.getElementById("ghOwner")?.value || "").trim();
+    const repo = (document.getElementById("ghRepo")?.value || "").trim();
+    const token = (document.getElementById("ghToken")?.value || "").trim();
+    const aiKey = (document.getElementById("aiApiKey")?.value || "").trim();
+
+    localStorage.setItem("nuv_owner", owner);
+    localStorage.setItem("nuv_repo", repo);
+    localStorage.setItem("nuv_token", token);
+    localStorage.setItem("nuv_aikey", aiKey);
+    setStatus("PARAMETRLƏR SAXLANILDI");
+    logMsg("Parametrlər yadda saxlanıldı.");
+  }
+
+  // --- 360 LIDAR ---
+  const canvas = document.getElementById("lidarCanvas");
+  const ctx = canvas ? canvas.getContext("2d") : null;
+  let sweepAngle = 0;
+  let lidarRunning = true;
+  let obstacles = [];
+
+  function updateTelemetry() {
+    const sectors = { front: 12.0, right: 12.0, back: 12.0, left: 12.0 };
+    obstacles.forEach(o => {
+      const m = +(o.dist / 10.5).toFixed(1);
+      if (o.angle >= 315 || o.angle < 45) sectors.front = Math.min(sectors.front, m);
+      else if (o.angle >= 45 && o.angle < 135) sectors.right = Math.min(sectors.right, m);
+      else if (o.angle >= 135 && o.angle < 225) sectors.back = Math.min(sectors.back, m);
+      else sectors.left = Math.min(sectors.left, m);
+    });
+    if (document.getElementById("distFront")) document.getElementById("distFront").textContent = sectors.front + " m";
+    if (document.getElementById("distRight")) document.getElementById("distRight").textContent = sectors.right + " m";
+    if (document.getElementById("distBack")) document.getElementById("distBack").textContent = sectors.back + " m";
+    if (document.getElementById("distLeft")) document.getElementById("distLeft").textContent = sectors.left + " m";
+    return sectors;
+  }
+
+  function randomizeObstacles() {
+    obstacles = [];
+    for (let i = 0; i < 16; i++) {
+      obstacles.push({
+        angle: Math.random() * 360,
+        dist: 22 + Math.random() * 102,
+        size: 3.5 + Math.random() * 3.5
+      });
+    }
+    const sectors = updateTelemetry();
+    Object.values(loadedPlugins).forEach(fn => {
+      try { fn({ event: "lidar_update", sectors, api: NUVCORE_API }); } catch (_) {}
+    });
+    renderLidarFrame();
+    logMsg("360° LiDAR: Yeni maneələr yaradıldı.");
+  }
+
+  function renderLidarFrame() {
+    if (!canvas || !ctx) return;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const maxR = 128;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#060d16";
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR + 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(0, 240, 181, 0.25)";
+    ctx.lineWidth = 1;
+    for (let r = 32; r <= maxR; r += 32) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(cx - maxR, cy); ctx.lineTo(cx + maxR, cy);
+    ctx.moveTo(cx, cy - maxR); ctx.lineTo(cx, cy + maxR);
+    ctx.stroke();
+
+    const rad = ((sweepAngle - 90) * Math.PI) / 180;
+    ctx.fillStyle = "rgba(0, 240, 181, 0.16)";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, maxR, rad - 0.45, rad);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "#00f0b5";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(rad) * maxR, cy + Math.sin(rad) * maxR);
+    ctx.stroke();
+
+    obstacles.forEach(o => {
+      const oRad = ((o.angle - 90) * Math.PI) / 180;
+      const ox = cx + Math.cos(oRad) * o.dist;
+      const oy = cy + Math.sin(oRad) * o.dist;
+      ctx.fillStyle = o.dist < 48 ? "#ff4d6d" : "#ffb020";
+      ctx.beginPath();
+      ctx.arc(ox, oy, o.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = "#00f0b5";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function lidarLoop() {
+    if (lidarRunning) {
+      sweepAngle = (sweepAngle + 2.5) % 360;
+      renderLidarFrame();
+    }
+    requestAnimationFrame(lidarLoop);
+  }
+
+  function toggleLidar() {
+    lidarRunning = !lidarRunning;
+    const btn = document.getElementById("toggleLidarBtn");
+    if (btn) btn.textContent = lidarRunning ? "Skanı Dayandır" : "Skanı Başlat";
+    logMsg(lidarRunning ? "360° LiDAR skanı aktivdir." : "360° LiDAR skanı dayandırıldı.");
+  }
+
+  // --- GITHUB BAZA & PLUGINS ---
+  function decodeBase64Utf8(b64) {
+    const clean = (b64 || "").replace(/\n/g, "");
+    const binStr = atob(clean);
+    const bytes = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  function encodeUtf8Base64(str) {
+    const bytes = new TextEncoder().encode(str);
+    let binStr = "";
+    for (let i = 0; i < bytes.length; i++) binStr += String.fromCharCode(bytes[i]);
+    return btoa(binStr);
+  }
+
+  function safeJsonParse(txt) {
+    try { return JSON.parse(txt); } catch (_) { return null; }
+  }
+
+  async function ghGetRaw(path) {
+    const { owner, repo, token } = getGhConfig();
+    if (!owner || !repo) throw new Error("GitHub Owner və ya Repo adı boşdur.");
+    const headers = { "Accept": "application/vnd.github+json" };
+    if (token) headers["Authorization"] = "Bearer " + token;
+
+    const res = await fetch("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + path, { headers });
+    if (!res.ok) throw new Error(path + " -> HTTP " + res.status);
+    const data = await res.json();
+    if (Array.isArray(data)) return data;
+    const text = decodeBase64Utf8(data.content);
+    return { sha: data.sha, text: text, json: safeJsonParse(text) };
+  }
+
+  async function ghPutRaw(path, rawText, sha, commitMsg) {
+    const { owner, repo, token } = getGhConfig();
+    if (!token) throw new Error("GitHub Token daxil edilməyib.");
+
+    const body = { message: commitMsg, content: encodeUtf8Base64(rawText) };
+    if (sha) body.sha = sha;
+
+    const res = await fetch("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + path, {
+      method: "PUT",
+      headers: {
+        "Accept": "application/vnd.github+json",
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error("PUT " + path + " -> HTTP " + res.status);
+    return res.json();
+  }
+
+  function runPluginCodeSafe(name, code) {
+    const runner = new Function("api", "context", code);
+    runner(NUVCORE_API, { pluginName: name });
+    logMsg("Əlavə modul işə düşdü: plugins/" + name);
+  }
+
+  function renderPlugins() {
+    const el = document.getElementById("pluginList");
+    if (!el) return;
+    if (!dbState.plugins.length) {
+      el.innerHTML = '<div class="list-item"><span>Hələ əlavə modul yoxdur.</span></div>';
+      return;
+    }
+    el.innerHTML = dbState.plugins.map(p =>
+      '<div class="list-item"><span>' + p.name + '</span><span class="pill">AKTİV</span></div>'
+    ).join("");
+  }
+
+  async function loadPluginsFromRepo() {
+    try {
+      logMsg("plugins/ qovluğu yoxlanılır...");
+      const files = await ghGetRaw("plugins");
+      if (!Array.isArray(files)) return;
+      dbState.plugins = [];
+      for (const f of files) {
+        if (!f.name || !f.name.endsWith(".js")) continue;
+        const item = await ghGetRaw("plugins/" + f.name);
+        runPluginCodeSafe(f.name, item.text);
+        dbState.plugins.push({ name: f.name, sha: item.sha });
+      }
+      renderPlugins();
+    } catch (err) {
+      logMsg("PLUGINS OXUNMADI: " + err.message, "log-warn");
+    }
+  }
+
+  // --- GEMINI API SORĞU FUNKSİYASI ---
+  async function callGeminiText(apiKey, prompt, systemText = "") {
+    if (!apiKey) throw new Error("AI API Key daxil edilməyib.");
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+    let lastErr = null;
+
+    for (const model of models) {
+      try {
+        const payload = {
+          contents: [{ role: "user", parts: [{ text: prompt }] }]
+        };
+        if (systemText) {
+          payload.systemInstruction = { parts: [{ text: systemText }] };
+        }
+
+        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + encodeURIComponent(apiKey);
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errBody = await res.text();
+          throw new Error(model + " HTTP " + res.status + ": " + errBody.slice(0, 140));
+        }
+
+        const data = await res.json();
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        const text = parts.map(p => p.text || "").join("").trim();
+        if (!text) throw new Error(model + " boş cavab qaytardı.");
+        return text;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    throw lastErr || new Error("Gemini sorğusu uğursuz oldu.");
+  }
+
+  async function generateAndSavePlugin() {
+    const apiKey = getApiKey();
+    const rawName = ((document.getElementById("pluginName")?.value || "custom_skill").trim() || "custom_skill")
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "_");
+    const goal = (document.getElementById("pluginGoal")?.value || "").trim();
+
+    if (!apiKey) {
+      appendChatBubble("Kod yazmaq üçün əvvəl AI API Key daxil edib 'Parametrləri Saxla' basın.", "err");
+      logMsg("AI API Key daxil edilməyib!", "log-warn");
+      return;
+    }
+    if (!goal) {
+      logMsg("Yeni funksiya məqsədini yazın.", "log-warn");
+      return;
+    }
+
+    setStatus("KOD YAZILIR...");
+    logMsg("'" + rawName + "' üçün yeni JS kodu yazılır...");
+
+    const systemInstruction =
+      "Sən NUVCORE.PCB üçün təhlükəsiz JavaScript əlavə modul (plugin) yazan mühəndissən. " +
+      "Yalnız icra oluna bilən təmiz JavaScript kodu qaytar. Markdown (```) və izahat yazma.";
+
+    const prompt =
+      "Sənə 'api' obyekti verilir: api.log(msg), api.getLidar(), api.getProjects(), api.addLog(obj), api.registerAction(name, fn).\n" +
+      "Məqsəd: " + goal;
+
+    try {
+      let code = await callGeminiText(apiKey, prompt, systemInstruction);
+      code = code.replace(/^```(?:javascript|js)?\s*/i, "").replace(/\s*```$/i, "").trim();
+
+      runPluginCodeSafe(rawName + ".js", code);
+
+      let existingSha = null;
+      try {
+        const cur = await ghGetRaw("plugins/" + rawName + ".js");
+        existingSha = cur.sha;
+      } catch (_) {}
+
+      const saved = await ghPutRaw("plugins/" + rawName + ".js", code, existingSha, "Add plugin " + rawName + ".js");
+      dbState.plugins = dbState.plugins.filter(p => p.name !== rawName + ".js");
+      dbState.plugins.push({ name: rawName + ".js", sha: saved.content.sha });
+      renderPlugins();
+
+      if (document.getElementById("pluginGoal")) document.getElementById("pluginGoal").value = "";
+      setStatus("MODUL YAZILDI");
+      appendChatBubble("Yeni modul hazırdır və bazaya yazıldı: plugins/" + rawName + ".js", "ai");
+      logMsg("SELF-EXTEND OK: plugins/" + rawName + ".js saxlanıldı.");
+    } catch (err) {
+      setStatus("MODUL XƏTASI", true);
+      appendChatBubble("Modul yazma xətası: " + err.message, "err");
+      logMsg("KOD YAZMA XƏTASI: " + err.message, "log-err");
+    }
+  }
+
+  function renderTasks() {
+    const listEl = document.getElementById("taskList");
+    if (!listEl) return;
+    if (!dbState.projects.items.length) {
+      listEl.innerHTML = '<div class="list-item"><span>Layihə/tapşırıq yoxdur.</span></div>';
+      return;
+    }
+    listEl.innerHTML = dbState.projects.items.map(t =>
+      '<div class="list-item"><span>' + (t.title || t.name || JSON.stringify(t)) + '</span><span class="pill">' + (t.status || "active") + '</span></div>'
+    ).join("");
+  }
+
+  async function loadDatabase() {
+    try {
+      logMsg("3 baza faylı oxunur...");
+      const [p, r, l] = await Promise.all([
+        ghGetRaw("memory/projects.json"),
+        ghGetRaw("memory/rules.json"),
+        ghGetRaw("memory/logs.json")
+      ]);
+
+      dbState.projects.sha = p.sha;
+      dbState.projects.raw = p.json;
+      dbState.projects.items = Array.isArray(p.json) ? p.json : ((p.json && (p.json.projects || p.json.tasks)) || []);
+
+      dbState.rules.sha = r.sha;
+      dbState.rules.data = r.json;
+
+      dbState.logs.sha = l.sha;
+      dbState.logs.raw = l.json;
+      dbState.logs.items = Array.isArray(l.json) ? l.json : ((l.json && l.json.logs) || []);
+
+      if (document.getElementById("viewProjects")) document.getElementById("viewProjects").textContent = JSON.stringify(p.json, null, 2);
+      if (document.getElementById("viewRules")) document.getElementById("viewRules").textContent = JSON.stringify(r.json, null, 2);
+      if (document.getElementById("viewLogs")) document.getElementById("viewLogs").textContent = JSON.stringify(l.json, null, 2);
+      renderTasks();
+      logMsg("DB READ OK: 3 fayl oxundu.");
+      await loadPluginsFromRepo();
+    } catch (err) {
+      logMsg("DB READ XƏTA: " + err.message, "log-err");
+    }
+  }
+
+  async function addTaskToProjects() {
+    const title = (document.getElementById("taskTitle")?.value || "").trim();
+    const status = document.getElementById("taskStatus")?.value || "in_progress";
+    if (!title) return logMsg("Tapşırıq adı yazın.", "log-warn");
+
+    try {
+      if (!dbState.projects.sha) await loadDatabase();
+      dbState.projects.items.unshift({
+        id: "tsk_" + Date.now(),
+        title: title,
+        status: status,
+        created_at: new Date().toISOString()
+      });
+
+      const payload = Array.isArray(dbState.projects.raw)
+        ? dbState.projects.items
+        : Object.assign({}, dbState.projects.raw || {}, { projects: dbState.projects.items });
+
+      const str = JSON.stringify(payload, null, 2);
+      const out = await ghPutRaw("memory/projects.json", str, dbState.projects.sha, "Add task: " + title);
+      dbState.projects.sha = out.content.sha;
+      dbState.projects.raw = payload;
+      if (document.getElementById("viewProjects")) document.getElementById("viewProjects").textContent = str;
+      if (document.getElementById("taskTitle")) document.getElementById("taskTitle").value = "";
+      renderTasks();
+      logMsg("DB WRITE OK: memory/projects.json yeniləndi.");
+    } catch (err) {
+      logMsg("DB WRITE XƏTA: " + err.message, "log-err");
+    }
+  }
+
+  async function appendLog(entry) {
+    try {
+      if (!dbState.logs.sha) await loadDatabase();
+      dbState.logs.items.unshift(entry);
+      const trimmed = dbState.logs.items.slice(0, 60);
+      const payload = Array.isArray(dbState.logs.raw)
+        ? trimmed
+        : Object.assign({}, dbState.logs.raw || {}, { logs: trimmed });
+
+      const str = JSON.stringify(payload, null, 2);
+      const out = await ghPutRaw("memory/logs.json", str, dbState.logs.sha, "NUVCORE.PCB log update");
+      dbState.logs.sha = out.content.sha;
+      dbState.logs.raw = payload;
+      dbState.logs.items = trimmed;
+      if (document.getElementById("viewLogs")) document.getElementById("viewLogs").textContent = str;
+      logMsg("DB WRITE OK: memory/logs.json yeniləndi.");
+    } catch (err) {
+      logMsg("DB WRITE XƏTA: " + err.message, "log-err");
+    }
+  }
+
+  function saveLidarToLogs() {
+    appendLog({ timestamp: new Date().toISOString(), source: "LIDAR_360", sectors: updateTelemetry() });
+  }
+
+  function runCycleAndWrite() {
+    appendLog({
+      timestamp: new Date().toISOString(),
+      source: "AGENT_CYCLE",
+      sectors: updateTelemetry(),
+      active_tasks: dbState.projects.items.length,
+      plugins_count: dbState.plugins.length
+    });
+  }
+
+  // --- ÇAT ---
+  function appendChatBubble(text, role) {
+    const box = document.getElementById("chatBox");
+    if (!box) return;
+    const div = document.createElement("div");
+    if (role === "user") div.className = "msg msg-user";
+    else if (role === "err") div.className = "msg msg-err";
+    else div.className = "msg msg-ai";
+    div.textContent = text;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function clearChat() {
+    const box = document.getElementById("chatBox");
+    if (box) box.innerHTML = "";
+  }
+
+  async function sendChatMessage() {
+    const apiKey = getApiKey();
+    const inputEl = document.getElementById("chatInput");
+    const userText = (inputEl?.value || "").trim();
+    if (!userText) return;
+
+    appendChatBubble(userText, "user");
+    if (inputEl) inputEl.value = "";
+
+    if (!apiKey) {
+      appendChatBubble("AI API Key daxil edilməyib! Yuxarıda açarı yazıb 'Parametrləri Saxla' basın.", "err");
+      logMsg("Çat üçün AI API Key yoxdur.", "log-warn");
+      return;
+    }
+
+    if (/^yeni kod yaz\s*:/i.test(userText)) {
+      const goal = userText.replace(/^yeni kod yaz\s*:/i, "").trim();
+      if (document.getElementById("pluginGoal")) document.getElementById("pluginGoal").value = goal;
+      appendChatBubble("Yeni modul tapşırığı qəbul edildi, kod yaradılır...", "ai");
+      await generateAndSavePlugin();
+      return;
+    }
+
+    const box = document.getElementById("chatBox");
+    const pendingBubble = document.createElement("div");
+    pendingBubble.className = "msg msg-ai";
+    pendingBubble.textContent = "Cavab yazılır...";
+    if (box) {
+      box.appendChild(pendingBubble);
+      box.sc
