@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NUVCORE.PCB</title>
+  <style>
+    :root{--bg:#07111d;--panel:#0b1927;--line:#16324a;--green:#00f0b5;--orange:#ffb020;--red:#ff4d6d;--text:#d8e8f5}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,sans-serif}
+    .app{display:grid;grid-template-columns:280px 1fr 300px;min-height:100vh}
+    .side,.main,.right{padding:16px;border-right:1px solid var(--line)}
+    .right{border-right:0}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+    h1,h2,h3{margin:0 0 12px}
+    h1{color:var(--green);font-size:20px}
+    h2{font-size:15px}
+    input,select,textarea,button{width:100%;margin:5px 0;padding:9px;border-radius:6px;border:1px solid var(--line);background:#07111d;color:var(--text)}
+    textarea{min-height:74px;resize:vertical}
+    button{cursor:pointer;font-weight:700;background:#10283b}
+    button:hover{border-color:var(--green)}
+    .badge{display:inline-block;padding:5px 8px;border-radius:20px;background:#16324a;color:var(--green)}
+    .badge.err{color:white;background:#7d2638}
+    .grid{display:grid;grid-template-columns:minmax(280px,1fr) 1fr;gap:12px}
+    .lidar{display:grid;grid-template-columns:260px 1fr;align-items:center}
+    #lidarCanvas{width:260px;height:260px}
+    .telemetry{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .metric{padding:12px;text-align:center;border:1px solid var(--line);border-radius:8px}
+    .metric b{display:block;color:var(--green);font-size:18px}
+    .list-item{display:flex;justify-content:space-between;gap:8px;padding:8px;border-bottom:1px solid var(--line)}
+    .pill{color:var(--green);font-size:12px}
+    pre{max-height:180px;overflow:auto;white-space:pre-wrap;color:#9ec7d8}
+    #consoleLog{max-height:220px;overflow:auto}
+    #consoleLog div{padding:3px 0;border-bottom:1px solid #10283b}
+    .log-warn{color:var(--orange)}.log-err{color:var(--red)}
+    #chatBox{min-height:180px;max-height:260px;overflow:auto}
+    .msg{margin:6px 0;padding:8px;border-radius:7px}
+    .msg-ai{background:#10283b}.msg-user{background:#183a2d}.msg-err{background:#54202a;color:#fff}
+    @media(max-width:1000px){.app{grid-template-columns:1fr}.side,.main,.right{border-right:0}.grid,.lidar{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <h1>NUVCORE.PCB</h1>
+    <div id="sysStatus" class="badge">SİSTEM HAZIR</div>
+
+    <div class="card">
+      <h2>GitHub</h2>
+      <input id="ghOwner" placeholder="GitHub owner">
+      <input id="ghRepo" placeholder="Repository">
+      <input id="ghToken" type="password" placeholder="GitHub token">
+    </div>
+
+    <div class="card">
+      <h2>AI</h2>
+      <input id="aiApiKey" type="password" placeholder="Gemini API Key">
+      <button type="button" onclick="saveSettings()">Parametrləri Saxla</button>
+    </div>
+
+    <div class="card">
+      <h2>Yeni tapşırıq</h2>
+      <input id="taskTitle" placeholder="Tapşırıq adı">
+      <select id="taskStatus">
+        <option value="in_progress">İcrada</option>
+        <option value="active">Aktiv</option>
+        <option value="done">Tamamlandı</option>
+      </select>
+      <button type="button" onclick="addTask()">Tapşırıq Əlavə Et</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="grid">
+      <div class="card">
+        <h2>360° LiDAR</h2>
+        <div class="lidar">
+          <canvas id="lidarCanvas" width="260" height="260"></canvas>
+          <div class="telemetry">
+            <div class="metric">ÖN<b id="distFront">12 m</b></div>
+            <div class="metric">SAĞ<b id="distRight">12 m</b></div>
+            <div class="metric">ARXA<b id="distBack">12 m</b></div>
+            <div class="metric">SOL<b id="distLeft">12 m</b></div>
+          </div>
+        </div>
+        <button id="toggleLidarBtn" type="button" onclick="toggleLidar()">Skanı Dayandır</button>
+        <button type="button" onclick="randomizeObstacles()">Yeni Maneələr</button>
+        <button type="button" onclick="saveLidarSnapshot()">LiDAR Snapshot Saxla</button>
+        <button type="button" onclick="runCycleAndWrite()">Agent Dövrü Yaz</button>
+      </div>
+
+      <div class="card">
+        <h2>Tapşırıqlar</h2>
+        <div id="taskList"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Modul Generatoru</h2>
+      <input id="pluginName" placeholder="modul_adı">
+      <textarea id="pluginGoal" placeholder="Modulun məqsədini yazın"></textarea>
+      <button type="button" onclick="generatePlugin()">Modul Yarat və GitHub-a Yaz</button>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Modullar</h2>
+        <div id="pluginList"></div>
+      </div>
+      <div class="card">
+        <h2>Söhbət</h2>
+        <div id="chatBox"></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><h2>Projects</h2><pre id="viewProjects">{}</pre></div>
+      <div class="card"><h2>Rules</h2><pre id="viewRules">{}</pre></div>
+    </div>
+    <div class="card"><h2>Logs</h2><pre id="viewLogs">[]</pre></div>
+  </main>
+
+  <aside class="right">
+    <div class="card">
+      <h2>Əməliyyat Lövhəsi</h2>
+      <div id="consoleLog"></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+function byId(id){return document.getElementById(id)}
+
+function logMsg(msg,type){
+  var box=byId("consoleLog"); if(!box)return;
+  var line=document.createElement("div");
+  if(type)line.className=type;
+  line.textContent="["+new Date().toLocaleTimeString()+"] "+msg;
+  box.insertBefore(line,box.firstChild);
+}
+
+function setStatus(text,isErr){
+  var st=byId("sysStatus");if(!st)return;
+  st.textContent=text;st.className=isErr?"badge err":"badge";
+}
+
+window.onerror=function(message,source,line){
+  setStatus("XƏTA: Sətir "+line,true);
+  logMsg("JS XƏTA ("+line+"): "+message,"log-err");
+  return false;
+};
+
+function storageGet(k){try{return window.localStorage.getItem(k)||""}catch(e){return""}}
+function storageSet(k,v){try{window.localStorage.setItem(k,v)}catch(e){}}
+
+var loadedPlugins={};
+var dbState={
+  projects:{sha:null,items:[],raw:null},
+  rules:{sha:null,data:null},
+  logs:{sha:null,items:[],raw:null},
+  plugins:[]
+};
+
+var NUVCORE_API={
+  log:function(msg,type){logMsg("[PLUGIN] "+msg,type||"")},
+  getLidar:updateTelemetry,
+  getProjects:function(){return dbState.projects.items},
+  addLog:appendLog,
+  registerAction:function(name,fn){loadedPlugins[name]=fn;logMsg("Funksiya qeydə alındı: "+name)}
+};
+
+function getApiKey(){
+  var el=byId("aiApiKey");
+  var val=el&&el.value?el.value.trim(): "";
+  return val||storageGet("nuv_aikey");
+}
+
+function getGhConfig(){
+  var o=byId("ghOwner"),r=byId("ghRepo"),t=byId("ghToken");
+  return{
+    owner:(o&&o.value?o.value.trim(): "")||storageGet("nuv_owner")||"nuvcore-pcb",
+    repo:(r&&r.value?r.value.trim(): "")||storageGet("nuv_repo")||"nuvcore.pcb",
+    token:(t&&t.value?t.value.trim(): "")||storageGet("nuv_token")
+  };
+}
+
+function loadSettings(){
+  if(byId("ghOwner"))byId("ghOwner").value=storageGet("nuv_owner")||"nuvcore-pcb";
+  if(byId("ghRepo"))byId("ghRepo").value=storageGet("nuv_repo")||"nuvcore.pcb";
+  if(byId("ghToken"))byId("ghToken").value=storageGet("nuv_token");
+  if(byId("aiApiKey"))byId("aiApiKey").value=storageGet("nuv_aikey");
+}
+
+function saveSettings(){
+  storageSet("nuv_owner",byId("ghOwner")?byId("ghOwner").value.trim(): "");
+  storageSet("nuv_repo",byId("ghRepo")?byId("ghRepo").value.trim(): "");
+  storageSet("nuv_token",byId("ghToken")?byId("ghToken").value.trim(): "");
+  storageSet("nuv_aikey",byId("aiApiKey")?byId("aiApiKey").value.trim(): "");
+  setStatus("PARAMETRLƏR SAXLANILDI",false);
+  logMsg("Parametrlər yadda saxlanıldı.");
+}
+
+var canvas=byId("lidarCanvas");
+var ctx=canvas&&canvas.getContext?canvas.getContext("2d"):null;
+var sweepAngle=0,lidarRunning=true,obstacles=[];
+
+function updateTelemetry(){
+  var sectors={front:12,right:12,back:12,left:12};
+  obstacles.forEach(function(o){
+    var m=+(o.dist/10).toFixed(1);
+    if(o.angle>=315||o.angle<45)sectors.front=Math.min(sectors.front,m);
+    else if(o.angle<135)sectors.right=Math.min(sectors.right,m);
+    else if(o.angle<225)sectors.back=Math.min(sectors.back,m);
+    else sectors.left=Math.min(sectors.left,m);
+  });
+  if(byId("distFront"))byId("distFront").textContent=sectors.front+" m";
+  if(byId("distRight"))byId("distRight").textContent=sectors.right+" m";
+  if(byId("distBack"))byId("distBack").textContent=sectors.back+" m";
+  if(byId("distLeft"))byId("distLeft").textContent=sectors.left+" m";
+  return sectors;
+}
+
+function randomizeObstacles(){
+  obstacles=[];
+  for(var i=0;i<16;i++)obstacles.push({angle:Math.random()*360,dist:20+Math.random()*96,size:3.5+Math.random()*3.5});
+  var sectors=updateTelemetry();
+  Object.keys(loadedPlugins).forEach(function(name){
+    try{loadedPlugins[name]({event:"lidar_update",sectors:sectors,api:NUVCORE_API})}catch(e){}
+  });
+  renderLidarFrame();
+  logMsg("360° LiDAR: Yeni maneələr yaradıldı.");
+}
+
+function renderLidarFrame(){
+  if(!canvas||!ctx)return;
+  var cx=130,cy=130,maxR=118;
+  ctx.clearRect(0,0,260,260);
+  ctx.fillStyle="#060d16";ctx.beginPath();ctx.arc(cx,cy,maxR+6,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle="rgba(0,240,181,.25)";
+  for(var r=30;r<=maxR;r+=30){ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke()}
+  ctx.beginPath();ctx.moveTo(12,cy);ctx.lineTo(248,cy);ctx.moveTo(cx,12);ctx.lineTo(cx,248);ctx.stroke();
+  var rad=((sweepAngle-90)*Math.PI)/180;
+  ctx.fillStyle="rgba(0,240,181,.16)";ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,maxR,rad-.45,rad);ctx.closePath();ctx.fill();
+  ctx.strokeStyle="#00f0b5";ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(rad)*maxR,cy+Math.sin(rad)*maxR);ctx.stroke();
+  obstacles.forEach(function(o){
+    var rad2=((o.angle-90)*Math.PI)/180;
+    var ox=cx+Math.cos(rad2)*o.dist,oy=cy+Math.sin(rad2)*o.dist;
+    ctx.fillStyle=o.dist<45?"#ff4d6d":"#ffb020";ctx.beginPath();ctx.arc(ox,oy,o.size,0,Math.PI*2);ctx.fill();
+  });
+  ctx.fillStyle="#00f0b5";ctx.beginPath();ctx.arc(cx,cy,5,0,Math.PI*2);ctx.fill();
+}
+
+function lidarLoop(){
+  if(lidarRunning){sweepAngle=(sweepAngle+2.5)%360;renderLidarFrame()}
+  requestAnimationFrame(lidarLoop);
+}
+
+function toggleLidar(){
+  lidarRunning=!lidarRunning;
+  byId("toggleLidarBtn").textContent=lidarRunning?"Skanı Dayandır":"Skanı Başlat";
+  logMsg(lidarRunning?"360° LiDAR skanı aktivdir.":"360° LiDAR skanı dayandırıldı.");
+}
+
+function decodeBase64Utf8(b64){
+  var clean=(b64||"").replace(/\n/g,"");
+  return decodeURIComponent(escape(atob(clean)));
+}
+
+function encodeUtf8Base64(str){return btoa(unescape(encodeURIComponent(str)))}
+function safeJsonParse(txt){try{return JSON.parse(txt)}catch(e){return null}}
+
+function ghGetRaw(path){
+  var cfg=getGhConfig();
+  if(!cfg.owner||!cfg.repo)return Promise.reject(new Error("GitHub owner və repo boşdur."));
+  var headers={"Accept":"application/vnd.github+json"};
+  if(cfg.token)headers.Authorization="Bearer "+cfg.token;
+  return fetch("https://api.github.com/repos/"+encodeURIComponent(cfg.owner)+"/"+encodeURIComponent(cfg.repo)+"/contents/"+path,{headers})
+    .then(function(res){
+      if(!res.ok)return res.text().then(function(t){throw new Error(path+" -> HTTP "+res.status+": "+t.slice(0,120))});
+      return res.json();
+    })
+    .then(function(data){
+      if(Array.isArray(data))return data;
+      var text=decodeBase64Utf8(data.content);
+      return{sha:data.sha,text:text,json:safeJsonParse(text)};
+    });
+}
+
+function ghPutRaw(path,rawText,sha,commitMsg){
+  var cfg=getGhConfig();
+  if(!cfg.token)return Promise.reject(new Error("GitHub token daxil edilməyib."));
+  var body={message:commitMsg,content:encodeUtf8Base64(rawText)};
+  if(sha)body.sha=sha;
+  return fetch("https://api.github.com/repos/"+encodeURIComponent(cfg.owner)+"/"+encodeURIComponent(cfg.repo)+"/contents/"+path,{
+    method:"PUT",
+    headers:{"Accept":"application/vnd.github+json","Authorization":"Bearer "+cfg.token,"Content-Type":"application/json"},
+    body:JSON.stringify(body)
+  }).then(function(res){
+    if(!res.ok)return res.text().then(function(t){throw new Error("PUT "+path+" -> HTTP "+res.status+": "+t.slice(0,120))});
+    return res.json();
+  });
+}
+
+function runPluginCodeSafe(name,code){
+  var runner=new Function("api","context",code);
+  runner(NUVCORE_API,{pluginName:name});
+  logMsg("Modul işə düşdü: plugins/"+name);
+}
+
+function renderPlugins(){
+  var el=byId("pluginList");if(!el)return;
+  if(!dbState.plugins.length){el.innerHTML='<div class="list-item"><span>Modul yoxdur.</span></div>';return}
+  el.innerHTML=dbState.plugins.map(function(p){return'<div class="list-item"><span>'+p.name+'</span><span class="pill">AKTİV</span></div>'}).join("");
+}
+
+function loadPluginsFromRepo(){
+  logMsg("plugins/ yoxlanılır...");
+  return ghGetRaw("plugins").then(function(files){
+    dbState.plugins=[];
+    var chain=Promise.resolve();
+    files.forEach(function(f){
+      if(!f.name||!/\.(js)$/i.test(f.name))return;
+      chain=chain.then(function(){
+        return ghGetRaw("plugins/"+f.name).then(function(item){
+          try{runPluginCodeSafe(f.name,item.text)}catch(e){logMsg("Modul xətası "+f.name+": "+e.message,"log-err")}
+          dbState.plugins.push({name:f.name,sha:item.sha});
+        });
+      });
+    });
+    return chain.then(renderPlugins);
+  }).catch(function(e){logMsg("Plugins oxunmadı: "+e.message,"log-warn")});
+}
+
+function callGeminiText(apiKey,prompt,systemText){
+  var models=["gemini-2.5-flash","gemini-2.0-flash"];
+  function attempt(i){
+    if(i>=models.length)return Promise.reject(new Error("Gemini sorğusu uğursuz oldu."));
+    var model=models[i],payload={contents:[{role:"user",parts:[{text:prompt}]}]};
+    if(systemText)payload.systemInstruction={parts:[{text:systemText}]};
+    var url="https://generativelanguage.googleapis.com/v1beta/models/"+model+":generateContent?key="+encodeURIComponent(apiKey);
+    return fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(res){if(!res.ok)return res.text().then(function(t){throw new Error(model+" HTTP "+res.status+": "+t.slice(0,120))});return res.json()})
+      .then(function(data){
+        var parts=data&&data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts||[];
+        var out=parts.map(function(p){return p.text||""}).join("").trim();
+        if(!out)throw new Error(model+" boş cavab qaytardı.");
+        return out;
+      }).catch(function(){return attempt(i+1)});
+  }
+  return attempt(0);
+}
+
+function generatePlugin(){
+  var key=getApiKey(),nameEl=byId("pluginName"),goalEl=byId("pluginGoal");
+  var name=(nameEl&&nameEl.value.trim()?nameEl.value.trim(): "custom_skill").toLowerCase().replace(/[^a-z0-9_]/g,"_");
+  var goal=goalEl&&goalEl.value.trim();
+  if(!key)return appendChatBubble("AI API Key daxil edin.","err");
+  if(!goal)return logMsg("Modul məqsədi boşdur.","log-warn");
+  setStatus("KOD YAZILIR...",false);
+  var prompt="Sənə api verilir: api.log(msg), api.getLidar(), api.getProjects(), api.addLog(obj), api.registerAction(name,fn). Məqsəd: "+goal;
+  callGeminiText(key,prompt,"Yalnız təmiz JavaScript kodu qaytar. Markdown və izahat yazma.")
+    .then(function(code){
+      var clean=code.replace(/^```(?:javascript|js)?\s*/i,"").replace(/\s*```$/i,"").trim();
+      runPluginCodeSafe(name+".js",clean);
+      return ghGetRaw("plugins/"+name+".js").then(function(x){return x.sha}).catch(function(){return null})
+        .then(function(sha){return ghPutRaw("plugins/"+name+".js",clean,sha,"Add plugin "+name+".js")})
+        .then(function(saved){
+          dbState.plugins=dbState.plugins.filter(function(p){return p.name!==name+".js"});
+          dbState.plugins.push({name:name+".js",sha:saved.content.sha});renderPlugins();
+          goalEl.value="";setStatus("MODUL YAZILDI",false);
+          appendChatBubble("Modul saxlanıldı: plugins/"+name+".js","ai");
+        });
+    }).catch(function(e){setStatus("MODUL XƏTASI",true);appendChatBubble(e.message,"err")});
+}
+
+function renderTasks(){
+  var el=byId("taskList");if(!el)return;
+  if(!dbState.projects.items.length){el.innerHTML='<div class="list-item"><span>Tapşırıq yoxdur.</span></div>';return}
+  el.innerHTML=dbState.projects.items.map(function(t){
+    return'<div class="list-item"><span>'+escapeHtml(t.title||t.name||"Naməlum")+'</span><span class="pill">'+escapeHtml(t.status||"active")+'</span></div>';
+  }).join("");
+}
+
+function escapeHtml(v){
+  var d=document.createElement("div");d.textContent=String(v);return d.innerHTML;
+}
+
+function loadDatabase(){
+  logMsg("3 baza faylı oxunur...");
+  var p,r,l;
+  return ghGetRaw("memory/projects.json").then(function(x){p=x;return ghGetRaw("memory/rules.json")})
+    .then(function(x){r=x;return ghGetRaw("memory/logs.json")})
+    .then(function(x){
+      l=x;
+      dbState.projects.sha=p.sha;dbState.projects.raw=p.json;
+      dbState.projects.items=Array.isArray(p.json)?p.json:(p.json&&Array.isArray(p.json.projects)?p.json.projects:(p.json&&Array.isArray(p.json.tasks)?p.json.tasks:[]));
+      dbState.rules.sha=r.sha;dbState.rules.data=r.json;
+      dbState.logs.sha=l.sha;dbState.logs.raw=l.json;
+      dbState.logs.items=Array.isArray(l.json)?l.json:(l.json&&Array.isArray(l.json.logs)?l.json.logs:[]);
+      byId("viewProjects").textContent=JSON.stringify(p.json,null,2);
+      byId("viewRules").textContent=JSON.stringify(r.json,null,2);
+      byId("viewLogs").textContent=JSON.stringify(l.json,null,2);
+      renderTasks();logMsg("DB READ OK: 3 fayl oxundu.");
+      return loadPluginsFromRepo();
+    }).catch(function(e){logMsg("DB READ XƏTA: "+e.message,"log-err")});
+}
+
+function addTask(){
+  var titleEl=byId("taskTitle"),statusEl=byId("taskStatus");
+  var title=titleEl.value.trim();if(!title)return logMsg("Tapşırıq adı yazın.","log-warn");
+  var ensure=dbState.projects.sha?Promise.resolve():loadDatabase();
+  ensure.then(function(){
+    dbState.projects.items.unshift({id:"tsk_"+Date.now(),title:title,status:statusEl.value,created_at:new Date().toISOString()});
+    var payload=Array.isArray(dbState.projects.raw)?dbState.projects.items:(dbState.projects.raw&&typeof dbState.projects.raw==="object"?dbState.projects.raw:{});
+    if(!Array.isArray(payload))payload.projects=dbState.projects.items;
+    var str=JSON.stringify(payload,null,2);
+    return ghPutRaw("memory/projects.json",str,dbState.projects.sha,"Add task: "+title).then(function(out){
+      dbState.projects.sha=out.content.sha;dbState.projects.raw=payload;
+      byId("viewProjects").textContent=str;titleEl.value="";renderTasks();
+      logMsg("DB WRITE OK: memory/projects.json yeniləndi.");
+    });
+  }).catch(function(e){logMsg("DB WRITE XƏTA: "+e.message,"log-err")});
+}
+
+function appendLog(entry){
+  var ensure=dbState.logs.sha?Promise.resolve():loadDatabase();
+  return ensure.then(function(){
+    dbState.logs.items.unshift(entry);
+    var trimmed=dbState.logs.items.slice(0,60);
+    var payload=Array.isArray(dbState.logs.raw)?trimmed:(dbState.logs.raw&&typeof dbState.logs.raw==="object"?dbState.logs.raw:{});
+    if(!Array.isArray(payload))payload.logs=trimmed;
+    var str=JSON.stringify(payload,null,2);
+    return ghPutRaw("memory/logs.json",str,dbState.logs.sha,"NUVCORE.PCB log update").then(function(out){
+      dbState.logs.sha=out.content.sha;dbState.logs.raw=payload;dbState.logs.items=trimmed;
+      byId("viewLogs").textContent=str;logMsg("DB WRITE OK: memory/logs.json yeniləndi.");
+    });
+  }).catch(function(e){logMsg("DB WRITE XƏTA: "+e.message,"log-err")});
+}
+
+function saveLidarSnapshot(){
+  return appendLog({timestamp:new Date().toISOString(),source:"LIDAR_360",sectors:updateTelemetry()});
+}
+
+function runCycleAndWrite(){
+  return appendLog({timestamp:new Date().toISOString(),source:"AGENT_CYCLE",sectors:updateTelemetry(),active_tasks:dbState.projects.items.length,plugins_count:dbState.plugi
