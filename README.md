@@ -1,2 +1,0 @@
-# nuvcore.pcb
-index.html
