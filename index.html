@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="az">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NUVCORE.PCB</title>
+  <style>
+    :root {
+      --bg: #07111d;
+      --panel: #0b1927;
+      --line: #16324a;
+      --green: #00f0b5;
+      --orange: #ffb020;
+      --red: #ff4d6d;
+      --text: #d8e8f5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px system-ui, sans-serif;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 260px minmax(320px, 1fr) 280px;
+      min-height: 100vh;
+    }
+
+    .side, .main, .right {
+      padding: 16px;
+    }
+
+    .side, .main {
+      border-right: 1px solid var(--line);
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    h1, h2 {
+      margin: 0 0 12px;
+    }
+
+    h1 {
+      color: var(--green);
+      font-size: 20px;
+    }
+
+    h2 { font-size: 15px; }
+
+    input, select, textarea, button {
+      width: 100%;
+      margin: 5px 0;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #07111d;
+      color: var(--text);
+    }
+
+    textarea {
+      min-height: 72px;
+      resize: vertical;
+    }
+
+    button {
+      cursor: pointer;
+      background: #10283b;
+      font-weight: 700;
+    }
+
+    button:hover { border-color: var(--green); }
+
+    .badge {
+      display: inline-block;
+      padding: 5px 9px;
+      border-radius: 20px;
+      background: #16324a;
+      color: var(--green);
+    }
+
+    .badge.err {
+      color: #fff;
+      background: #7d2638;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .lidar {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+
+    #lidarCanvas {
+      width: 260px;
+      height: 260px;
+    }
+
+    .telemetry {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(80px, 1fr));
+      gap: 8px;
+    }
+
+    .metric {
+      padding: 12px 6px;
+      text-align: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .metric b {
+      display: block;
+      margin-top: 5px;
+      color: var(--green);
+      font-size: 18px;
+    }
+
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .pill {
+      color: var(--green);
+      font-size: 12px;
+    }
+
+    pre {
+      max-height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+      color: #9ec7d8;
+    }
+
+    #consoleLog {
+      max-height: 220px;
+      overflow: auto;
+    }
+
+    #consoleLog div {
+      padding: 3px 0;
+      border-bottom: 1px solid #10283b;
+    }
+
+    .log-warn { color: var(--orange); }
+    .log-err { color: var(--red); }
+
+    #chatBox {
+      height: 230px;
+      overflow: auto;
+      margin-bottom: 8px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+    }
+
+    .msg {
+      margin: 6px 0;
+      padding: 8px;
+      border-radius: 7px;
+      white-space: pre-wrap;
+    }
+
+    .msg-ai { background: #10283b; }
+    .msg-user { background: #183a2d; }
+    .msg-err { background: #54202a; color: #fff; }
+
+    @media (max-width: 1000px) {
+      .app { grid-template-columns: 1fr; }
+      .side, .main { border-right: 0; }
+      .lidar, .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <h1>NUVCORE.PCB</h1>
+      <div id="sysStatus" class="badge">SİSTEM HAZIR</div>
+
+      <div class="card">
+        <h2>GitHub</h2>
+        <input id="ghOwner" placeholder="GitHub owner">
+        <input id="ghRepo" placeholder="Repository">
+        <input id="ghToken" type="password" placeholder="GitHub token">
+      </div>
+
+      <div class="card">
+        <h2>Gemini AI</h2>
+        <input id="aiApiKey" type="password" placeholder="Gemini API Key">
+        <button type="button" onclick="saveSettings()">Parametrləri Saxla</button>
+      </div>
+
+      <div class="card">
+        <h2>Yeni tapşırıq</h2>
+        <input id="taskTitle" placeholder="Tapşırıq adı">
+        <select id="taskStatus">
+          <option value="in_progress">İcrada</option>
+          <option value="active">Aktiv</option>
+          <option value="done">Tamamlandı</option>
+        </select>
+        <button type="button" onclick="addTask()">Əlavə et</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="grid">
+        <div class="card">
+          <h2>360° LiDAR</h2>
+          <div class="lidar">
+            <canvas id="lidarCanvas" width="260" height="260"></canvas>
+
+            <div class="telemetry">
+              <div class="metric">ÖN<b id="distFront">12 m</b></div>
+              <div class="metric">SAĞ<b id="distRight">12 m</b></div>
+              <div class="metric">ARXA<b id="distBack">12 m</b></div>
+              <div class="metric">SOL<b id="distLeft">12 m</b></div>
+            </div>
+          </div>
+
+          <button id="toggleLidarBtn" type="button" onclick="toggleLidar()">Skanı Dayandır</button>
+          <button type="button" onclick="randomizeObstacles()">Yeni maneələr</button>
+          <button type="button" onclick="saveLidarSnapshot()">LiDAR snapshot yaz</button>
+          <button type="button" onclick="runCycleAndWrite()">Agent dövrü yaz</button>
+        </div>
+
+        <div class="card">
+          <h2>Tapşırıqlar</h2>
+          <div id="taskList"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Modul Generatoru</h2>
+        <input id="pluginName" placeholder="modul_adı">
+        <textarea id="pluginGoal" placeholder="Modulun məqsədini yazın"></textarea>
+        <button type="button" onclick="generatePlugin()">Modul yarat və GitHub-a yaz</button>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Modullar</h2>
+          <div id="pluginList"></div>
+        </div>
+
+        <div class="card">
+          <h2>Söhbət</h2>
+          <div id="chatBox"></div>
+          <input id="chatInput" type="text" placeholder="Mesaj yazın">
+          <button type="button" onclick="sendChat()">Göndər</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Projects</h2>
+          <pre id="viewProjects">{}</pre>
+        </div>
+
+        <div class="card">
+          <h2>Rules</h2>
+          <pre id="viewRules">{}</pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Logs</h2>
+        <pre id="viewLogs">[]</pre>
+      </div>
+    </main>
+
+    <aside class="right">
+      <div class="card">
+        <h2>Əməliyyat lövhəsi</h2>
+        <div id="consoleLog"></div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    function byId(id) {
+      return document.getElementById(id);
+    }
+
+    function logMsg(message, type) {
+      var box = byId("consoleLog");
+      if (!box) return;
+
+      var line = document.createElement("div");
+      if (type) line.className = type;
+      line.textContent = "[" + new Date().toLocaleTimeString() + "] " + message;
+      box.insertBefore(line, box.firstChild);
+    }
+
+    function setStatus(text, isError) {
+      var status = byId("sysStatus");
+      if (!status) return;
+
+      status.textContent = text;
+      status.className = isError ? "badge err" : "badge";
+    }
+
+    window.onerror = function(message, source, line) {
+      setStatus("XƏTA: Sətir " + line, true);
+      logMsg("JS xətası (" + line + "): " + message, "log-err");
+      return false;
+    };
+
+    function storageGet(key) {
+      try {
+        return localStorage.getItem(key) || "";
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function storageSet(key, value) {
+      try {
+        localStorage.setItem(key, value);
+      } catch (error) {}
+    }
+
+    var dbState = {
+      projects: { sha: null, items: [], raw: null },
+      rules: { sha: null, data: null },
+      logs: { sha: null, items: [], raw: null },
+      plugins: []
+    };
+
+    var loadedPlugins = {};
+
+    var NUVCORE_API = {
+      log: function(message, type) {
+        logMsg("[PLUGIN] " + message, type || "");
+      },
+
+      getLidar: function() {
+        return updateTelemetry();
+      },
+
+      getProjects: function() {
+        return dbState.projects.items;
+      },
+
+      addLog: function(entry) {
+        return appendLog(entry);
+      },
+
+      registerAction: function(name, fn) {
+        loadedPlugins[name] = fn;
+        logMsg("Funksiya qeyd edildi: " + name);
+      }
+    };
+
+    function getApiKey() {
+      var input = byId("aiApiKey");
+      var value = input && input.value ? input.value.trim() : "";
+      return value || storageGet("nuv_aikey");
+    }
+
+    function getGhConfig() {
+      var ownerInput = byId("ghOwner");
+      var repoInput = byId("ghRepo");
+      var tokenInput = byId("ghToken");
+
+      return {
+        owner: (ownerInput && ownerInput.value ? ownerInput.value.trim() : "")
+          || storageGet("nuv_owner")
+          || "nuvcore-pcb",
+
+        repo: (repoInput && repoInput.value ? repoInput.value.trim() : "")
+          || storageGet("nuv_repo")
+          || "nuvcore.pcb",
+
+        token: (tokenInput && tokenInput.value ? tokenInput.value.trim() : "")
+          || storageGet("nuv_token")
+      };
+    }
+
+    function loadSettings() {
+      if (byId("ghOwner")) {
+        byId("ghOwner").value = storageGet("nuv_owner") || "nuvcore-pcb";
+      }
+
+      if (byId("ghRepo")) {
+        byId("ghRepo").value = storageGet("nuv_repo") || "nuvcore.pcb";
+      }
+
+      if (byId("ghToken")) {
+        byId("ghToken").value = storageGet("nuv_token");
+      }
+
+      if (byId("aiApiKey")) {
+        byId("aiApiKey").value = storageGet("nuv_aikey");
+      }
+    }
+
+    function saveSettings() {
+      storageSet("nuv_owner", byId("ghOwner") ? byId("ghOwner").value.trim() : "");
+      storageSet("nuv_repo", byId("ghRepo") ? byId("ghRepo").value.trim() : "");
+      storageSet("nuv_token", byId("ghToken") ? byId("ghToken").value.trim() : "");
+      storageSet("nuv_aikey", byId("aiApiKey") ? byId("aiApiKey").value.trim() : "");
+
+      setStatus("PARAMETRLƏR SAXLANILDI", false);
+      logMsg("Parametrlər yadda saxlanıldı.");
+    }
+
+    var canvas = byId("lidarCanvas");
+    var ctx = canvas && canvas.getContext ? canvas.getContext("2d") : null;
+    var sweepAngle = 0;
+    var lidarRunning = true;
+    var obstacles = [];
+
+    function updateTelemetry() {
+      var sectors = { front: 12, right: 12, back: 12, left: 12 };
+
+      obstacles.forEach(function(obstacle) {
+        var distance = +(obstacle.dist / 10).toFixed(1);
+        var angle = obstacle.angle;
+
+        if (angle >= 315 || angle < 45) {
+          sectors.front = Math.min(sectors.front, distance);
+        } else if (angle < 135) {
+          sectors.right = Math.min(sectors.right, distance);
+        } else if (angle < 225) {
+          sectors.back = Math.min(sectors.back, distance);
+        } else {
+          sectors.left = Math.min(sectors.left, distance);
+        }
+      });
+
+      if (byId("distFront")) byId("distFront").textContent = sectors.front + " m";
+      if (byId("distRight")) byId("distRight").textContent = sectors.right + " m";
+      if (byId("distBack")) byId("distBack").textContent = sectors.back + " m";
+      if (byId("distLeft")) byId("distLeft").textContent = sectors.left + " m";
+
+      return sectors;
+    }
+
+    function randomizeObstacles() {
+      obstacles = [];
+
+      for (var i = 0; i < 16; i++) {
+        obstacles.push({
+          angle: Math.random() * 360,
+          dist: 20 + Math.random() * 96,
+          size: 3.5 + Math.random() * 3.5
+        });
+      }
+
+      var sectors = updateTelemetry();
+
+      Object.keys(loadedPlugins).forEach(function(name) {
+        try {
+          loadedPlugins[name]({
+            event: "lidar_update",
+            sectors: sectors,
+            api: NUVCORE_API
+          });
+        } catch (error) {}
+      });
+
+      renderLidarFrame();
+      logMsg("360° LiDAR: Yeni maneələr yaradıldı.");
+    }
+
+    function renderLidarFrame() {
+      if (!canvas || !ctx) return;
+
+      var center = 130;
+      var maxRadius = 118;
+
+      ctx.clearRect(0, 0, 260, 260);
+      ctx.fillStyle = "#060d16";
+      ctx.beginPath();
+      ctx.arc(center, center, maxRadius + 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(0, 240, 181, .25)";
+      ctx.lineWidth = 1;
+
+      for (var radius = 30; radius <= maxRadius; radius += 30) {
+        ctx.beginPath();
+        ctx.arc(center, center, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(12, center);
+      ctx.lineTo(248, center);
+      ctx.moveTo(center, 12);
+      ctx.lineTo(center, 248);
+      ctx.stroke();
+
+      var radians = ((sweepAngle - 90) * Math.PI) / 180;
+
+      ctx.fillStyle = "rgba(0, 240, 181, .16)";
+      ctx.beginPath();
+      ctx.moveTo(center, center);
+      ctx.arc(center, center, maxRadius, radians - 0.45, radians);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "#00f0b5";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(center, center);
+      ctx.lineTo(
+        center + Math.cos(radians) * maxRadius,
+        center + Math.sin(radians) * maxRadius
+      );
+      ctx.stroke();
+
+      obstacles.forEach(function(obstacle) {
+        var obstacleRadians = ((obstacle.angle - 90) * Math.PI) / 180;
+        var x = center + Math.cos(obstacleRadians) * obstacle.dist;
+        var y = center + Math.sin(obstacleRadians) * obstacle.dist;
+
+        ctx.fillStyle = obstacle.dist < 45 ? "#ff4d6d" : "#ffb020";
+        ctx.beginPath();
+        ctx.arc(x, y, obstacle.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.fillStyle = "#00f0b5";
+      ctx.beginPath();
+      ctx.arc(center, center, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function lidarLoop() {
+      if (lidarRunning) {
+        sweepAngle = (sweepAngle + 2.5) % 360;
+        renderLidarFrame();
+      }
+
+      requestAnimationFrame(lidarLoop);
+    }
+
+    function toggleLidar() {
+      lidarRunning = !lidarRunning;
+      byId("toggleLidarBtn").textContent =
+        lidarRunning ? "Skanı Dayandır" : "Skanı Başlat";
+
+      logMsg(
+        lidarRunning
+          ? "360° LiDAR skanı aktivdir."
+          : "360° LiDAR skanı dayandırıldı."
+      );
+    }
+
+    function decodeBase64Utf8(value) {
+      try {
+        var clean = (value || "").replace(/\n/g, "");
+        return decodeURIComponent(escape(atob(clean)));
+      } catch (error) {
+        throw new Error("UTF-8 baza64 məlumatı dekod edilə bilmədi.");
+      }
+    }
+
+    function encodeUtf8Base64(value) {
+      return btoa(unescape(encodeURIComponent(value)));
+    }
+
+    function safeJsonParse(text) {
+      try {
+        return JSON.parse(text);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function ghGetRaw(path) {
+      var config = getGhConfig();
+
+      if (!config.owner || !config.repo) {
+        return Promise.reject(new Error("GitHub owner və repo adı boşdur."));
+      }
+
+      var headers = {
+        "Accept": "application/vnd.github+json"
+      };
+
+      if (config.token) {
+        headers.Authorization = "Bearer " + config.token;
+      }
+
+      return fetch(
+        "https://api.github.com/repos/" +
+        encodeURIComponent(config.owner) + "/" +
+        encodeURIComponent(config.repo) +
+        "/contents/" + path,
+        { headers: headers }
+      ).then(function(response) {
+        if (!response.ok) {
+          return response.text().then(function(text) {
+            throw new Error(path + " -> HTTP " + response.status + ": " + text.slice(0, 150));
+          });
+        }
+
+        return response.json();
+      }).then(function(data) {
+        if (Array.isArray(data)) return data;
+
+        var text = decodeBase64Utf8(data.content);
+
+        return {
+          sha: data.sha,
+          text: text,
+          json: safeJsonParse(text)
+        };
+      });
+    }
+
+    function ghPutRaw(path, rawText, sha, commitMessage) {
+      var config = getGhConfig();
+
+      if (!config.token) {
+        return Promise.reject(new Error("GitHub token daxil edilməyib."));
+      }
+
+      var body = {
+        message: commitMessage,
+        content: encodeUtf8Base64(rawText)
+      };
+
+      if (sha) body.sha = sha;
+
+      return fetch(
+        "https://api.github.com/repos/" +
+        encodeURIComponent(config.owner) + "/" +
+        encodeURIComponent(config.repo) +
+        "/contents/" + path,
+        {
+          method: "PUT",
+          headers: {
+            "Accept": "application/vnd.github+json",
+            "Authorization": "Bearer " + config.token,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(body)
+        }
+      ).then(function(response) {
+        if (!response.ok) {
+          return response.text().then(function(text) {
+            throw new Error("PUT " + path + " -> HTTP " + response.status + ": " + text.slice(0, 150));
+          });
+        }
+
+        return response.json();
+      });
+    }
+
+    function runPluginCodeSafe(name, code) {
+      var runner = new Function("api", "context", code);
+      runner(NUVCORE_API, { pluginName: name });
+      logMsg("Modul işə düşdü: plugins/" + name);
+    }
+
+    function renderPlugins() {
+      var element = byId("pluginList");
+      if (!element) return;
+
+      if (!dbState.plugins.length) {
+        element.innerHTML =
+          '<div class="list-item"><span>Modul yoxdur.</span></div>';
+        return;
+      }
+
+      element.innerHTML = dbState.plugins.map(function(plugin) {
+        return (
+          '<div class="list-item">' +
+          "<span>" + escapeHtml(plugin.name) + "</span>" +
+          '<span class="pill">AKTİV</span>' +
+          "</div>"
+        );
+      }).join("");
+    }
+
+    function loadPluginsFromRepo() {
+      logMsg("plugins/ yoxlanılır...");
+
+      return ghGetRaw("plugins").then(function(files) {
+        dbState.plugins = [];
+        var chain = Promise.resolve();
+
+        files.forEach(function(file) {
+          if (!file.name || !/\.js$/i.test(file.name)) return;
+
+          chain = chain.then(function() {
+            return ghGetRaw("plugins/" + file.name).then(function(item) {
+              try {
+                runPluginCodeSafe(file.name, item.text);
+              } catch (error) {
+                logMsg(
+                  "Modul xətası " + file.name + ": " + error.message,
+                  "log-err"
+                );
+              }
+
+              dbState.plugins.push({
+                name: file.name,
+                sha: item.sha
+              });
+            });
+          });
+        });
+
+        return chain.then(renderPlugins);
+      }).catch(function(error) {
+        logMsg("Plugins oxunmadı: " + error.message, "log-warn");
+      });
+    }
+
+    function callGeminiText(apiKey, prompt, systemText) {
+      var models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+
+      function attempt(index) {
+        if (index >= models.length) {
+          return Promise.reject(new Error("Gemini sorğusu uğursuz oldu."));
+        }
+
+        var model = models[index];
+        var payload = {
+          contents: [{
+            role: "user",
+            parts: [{ text: prompt }]
+          }]
+        };
+
+        if (systemText) {
+          payload.systemInstruction = {
+            parts: [{ text: systemText }]
+          };
+        }
+
+        var url =
+          "https://generativelanguage.googleapis.com/v1beta/models/" +
+          model +
+          ":generateContent?key=" +
+          encodeURIComponent(apiKey);
+
+        return fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        }).then(function(response) {
+          if (!response.ok) {
+            return response.text().then(function(text) {
+      
