@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NUVCORE.PCB — Agent, 360° LiDAR & Çat</title>
+  <style>
+    :root {
+      --bg: #070b12;
+      --panel: #0e1624;
+      --border: #1e2d44;
+      --accent: #00f0b5;
+      --accent-dim: rgba(0, 240, 181, 0.14);
+      --warn: #ffb020;
+      --danger: #ff4d6d;
+      --text: #e2ecf8;
+      --muted: #8396b0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+    body { background: #070b12; color: #e2ecf8; padding: 12px; line-height: 1.45; }
+    .container { max-width: 1040px; margin: 0 auto; display: grid; gap: 12px; }
+    header {
+      background: #0e1624; border: 1px solid #1e2d44; border-radius: 12px;
+      padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+    }
+    header h1 { font-size: 1.05rem; color: #00f0b5; }
+    .badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 999px; background: rgba(0, 240, 181, 0.14); color: #00f0b5; border: 1px solid #00f0b5; }
+    .badge.err { background: rgba(255, 77, 109, 0.18); color: #ff4d6d; border-color: #ff4d6d; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 780px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card { background: #0e1624; border: 1px solid #1e2d44; border-radius: 12px; padding: 14px; }
+    .card h2 { font-size: 0.88rem; color: #00f0b5; margin-bottom: 10px; text-transform: uppercase; }
+    label { display: block; font-size: 0.78rem; color: #8396b0; margin: 8px 0 4px; }
+    input, textarea, select {
+      width: 100%; background: #09101b; border: 1px solid #1e2d44; color: #e2ecf8;
+      padding: 9px 10px; border-radius: 8px; font-size: 0.88rem;
+    }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    button {
+      background: #00f0b5; color: #04130f; border: none; padding: 9px 12px;
+      border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer;
+    }
+    button.secondary { background: #162338; color: #e2ecf8; border: 1px solid #1e2d44; }
+    button.warn { background: #ffb020; color: #191002; }
+
+    .lidar-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    canvas#lidarCanvas {
+      width: 260px; height: 260px; max-width: 100%;
+      background: #060d16; border: 2px solid #00f0b5; border-radius: 50%; display: block;
+    }
+    .telemetry-grid { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+    .t-box { background: #09101b; border: 1px solid #1e2d44; border-radius: 8px; padding: 7px 4px; }
+    .t-box span { display: block; font-size: 0.68rem; color: #8396b0; }
+    .t-box strong { font-size: 0.9rem; color: #00f0b5; }
+
+    #chatBox {
+      background: #060a11; border: 1px solid #1e2d44; border-radius: 8px;
+      padding: 10px; height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+      margin-bottom: 8px;
+    }
+    .msg { padding: 8px 10px; border-radius: 8px; font-size: 0.84rem; white-space: pre-wrap; word-break: break-word; }
+    .msg-user { background: #15263d; border: 1px solid #28456c; align-self: flex-end; max-width: 90%; }
+    .msg-ai { background: #0b1f1c; border: 1px solid rgba(0, 240, 181, 0.35); align-self: flex-start; max-width: 95%; }
+    .msg-err { background: rgba(255, 77, 109, 0.16); border: 1px solid #ff4d6d; color: #ffb3c1; align-self: flex-start; max-width: 95%; }
+    .check-row { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #8396b0; margin: 6px 0; }
+    .check-row input { width: auto; }
+
+    .list-box { display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto; margin-top: 8px; }
+    .list-item {
+      background: #09101b; border: 1px solid #1e2d44; border-radius: 8px;
+      padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.82rem;
+    }
+    .pill { font-size: 0.72rem; padding: 2px 7px; border-radius: 999px; background: #162338; color: #00f0b5; }
+
+    .files-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    @media (max-width: 780px) { .files-grid { grid-template-columns: 1fr; } }
+    .file-box { background: #09101b; border: 1px solid #1e2d44; border-radius: 8px; padding: 10px; }
+    .file-box h3 { font-size: 0.82rem; color: #00f0b5; margin-bottom: 6px; }
+    .file-box pre { font-size: 0.74rem; color: #b9cae0; max-height: 130px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+
+    #consoleLog {
+      background: #05080e; border: 1px solid #1e2d44; border-radius: 8px;
+      padding: 10px; height: 140px; overflow-y: auto; font-size: 0.78rem; color: #7ef9d4;
+    }
+    .log-err { color: #ff4d6d; }
+    .log-warn { color: #ffb020; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>NUVCORE.PCB // AGENT CORE</h1>
+    <span class="badge" id="sysStatus">YÜKLƏNİR...</span>
+  </header>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>360° LiDAR / Radar Skaner</h2>
+      <div class="lidar-wrap">
+        <canvas id="lidarCanvas" width="260" height="260"></canvas>
+        <div class="telemetry-grid">
+          <div class="t-box"><span>ÖN (0°)</span><strong id="distFront">-- m</strong></div>
+          <div class="t-box"><span>SAĞ (90°)</span><strong id="distRight">-- m</strong></div>
+          <div class="t-box"><span>ARXA (180°)</span><strong id="distBack">-- m</strong></div>
+          <div class="t-box"><span>SOL (270°)</span><strong id="distLeft">-- m</strong></div>
+        </div>
+        <div class="btn-row">
+          <button id="toggleLidarBtn" type="button">Skanı Dayandır</button>
+          <button class="secondary" id="newObsBtn" type="button">Yeni Maneə</button>
+          <button class="warn" id="saveLidarBtn" type="button">LiDAR-ı Bazaya Yaz</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>API Key & GitHub Baza Parametrləri</h2>
+      <label>GitHub İstifadəçi / Təşkilat Adı (Owner)</label>
+      <input id="ghOwner" placeholder="al-capilot və ya nuvcore-pcb" />
+
+      <label>Baza Repo Adı</label>
+      <input id="ghRepo" value="robot" />
+
+      <label>GitHub Token (Classic - repo icazəli)</label>
+      <input id="ghToken" type="password" placeholder="ghp_..." />
+
+      <label>Gemini / AI API Key</label>
+      <input id="aiApiKey" type="password" placeholder="AIza..." />
+
+      <div class="btn-row">
+        <button id="saveSettingsBtn" type="button">Parametrləri Saxla</button>
+        <button class="secondary" id="loadDbBtn" type="button">Bazanı Oxu (3 Fayl)</button>
+        <button class="secondary" id="loadPluginsBtn" type="button">Əlavə Kodları Yüklə</button>
+        <button class="warn" id="runCycleBtn" type="button">Dövr İcra Et və Yaz</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>Agent ilə Canlı Yazışma (Çat)</h2>
+      <div id="chatBox">
+        <div class="msg msg-ai">Salam! AI API Key daxil edib "Parametrləri Saxla" basın, sonra buradan mesaj yazın.</div>
+      </div>
+      <label class="check-row">
+        <input type="checkbox" id="includeLidarInChat" checked />
+        <span>Sorğuya cari 360° LiDAR məsafələrini əlavə et</span>
+      </label>
+      <textarea id="chatInput" rows="2" placeholder="Mesaj yazın və ya 'Yeni kod yaz: ...' əmri verin..."></textarea>
+      <div class="btn-row">
+        <button id="sendChatBtn" type="button">Göndər</button>
+        <button class="secondary" id="clearChatBtn" type="button">Çatı Təmizlə</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Özünə Əlavə Kod Yazdır (plugins/*.js)</h2>
+      <label>Yeni Bacarıq / Modul Adı</label>
+      <input id="pluginName" placeholder="məs: obstacle_alert" />
+
+      <label>Agentin Etməsini İstədiyiniz Yeni Funksiya</label>
+      <textarea id="pluginGoal" rows="2" placeholder="Məs: Ön məsafə 3 metrdən az olanda konsolda xəbərdarlıq versin"></textarea>
+
+      <div class="btn-row">
+        <button class="warn" id="genPluginBtn" type="button">Özünə Kod Yaz və Bazaya Kaydet</button>
+      </div>
+
+      <div class="list-box" id="pluginList">
+        <div class="list-item"><span>Hələ əlavə modul yüklənməyib.</span></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Layihə & Tapşırıq İdarəetməsi (projects.json)</h2>
+    <div class="grid-2">
+      <div>
+        <label>Yeni Tapşırıq / Layihə Adı</label>
+        <input id="taskTitle" placeholder="Məs: Avtonom modul testini tamamla" />
+      </div>
+      <div>
+        <label>Status</label>
+        <select id="taskStatus">
+          <option value="in_progress">in_progress (İcrada)</option>
+          <option value="todo">todo (Gözləyir)</option>
+          <option value="done">done (Tamamlandı)</option>
+        </select>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button id="addTaskBtn" type="button">Tapşırıq Əlavə Et və Bazaya Yaz</button>
+    </div>
+    <div class="list-box" id="taskList">
+      <div class="list-item"><span>Baza oxunduqda tapşırıqlar burada görünəcək.</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Baza Faylları (memory/*.json)</h2>
+    <div class="files-grid">
+      <div class="file-box">
+        <h3>memory/projects.json</h3>
+        <pre id="viewProjects">Oxunmayıb...</pre>
+      </div>
+      <div class="file-box">
+        <h3>memory/rules.json</h3>
+        <pre id="viewRules">Oxunmayıb...</pre>
+      </div>
+      <div class="file-box">
+        <h3>memory/logs.json</h3>
+        <pre id="viewLogs">Oxunmayıb...</pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Sistem Konsolu</h2>
+    <div id="consoleLog"></div>
+  </section>
+</div>
+
+<script>
+  function logMsg(msg, type) {
+    var box = document.getElementById("consoleLog");
+    if (!box) return;
+    var line = document.createElement("div");
+    if (type) line.className = type;
+    line.textContent = "[" + new Date().toLocaleTimeString() + "] " + msg;
+    box.insertBefore(line, box.firstChild);
+  }
+
+  function setStatus(text, isErr) {
+    var st = document.getElementById("sysStatus");
+    if (!st) return;
+    st.textContent = text;
+    st.className = isErr ? "badge err" : "badge";
+  }
+
+  window.onerror = function (message, source, lineno) {
+    setStatus("XƏTA: Sətir " + lineno, true);
+    logMsg("JS XƏTA (" + lineno + "): " + message, "log-err");
+  };
+
+  window.addEventListener("unhandledrejection", function (ev) {
+    setStatus("PROMISE XƏTASI", true);
+    var msg = (ev && ev.reason && ev.reason.message) ? ev.reason.message : String(ev && ev.reason ? ev.reason : "Xəta");
+    logMsg("ASYNC XƏTA: " + msg, "log-err");
+  });
+
+  function storageGet(k) {
+    try { return window.localStorage.getItem(k) || ""; } catch (e) { return ""; }
+  }
+
+  function storageSet(k, v) {
+    try { window.localStorage.setItem(k, v); } catch (e) {}
+  }
+
+  var loadedPlugins = {};
+  var dbState = {
+    projects: { sha: null, items: [], raw: null },
+    rules: { sha: null, data: null },
+    logs: { sha: null, items: [], raw: null },
+    plugins: []
+  };
+
+  var NUVCORE_API = {
+    log: function (msg, type) { logMsg("[PLUGIN] " + msg, type || ""); },
+    getLidar: function () { return updateTelemetry(); },
+    getProjects: function () { return dbState.projects.items; },
+    addLog: function (entry) { return appendLog(entry); },
+    registerAction: function (name, fn) {
+      loadedPlugins[name] = fn;
+      logMsg("Yeni əlavə funksiya qeydə alındı: " + name);
+    }
+  };
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function getApiKey() {
+    var el = byId("aiApiKey");
+    var val = el && el.value ? el.value.trim() : "";
+    return val || storageGet("nuv_aikey");
+  }
+
+  function getGhConfig() {
+    var oEl = byId("ghOwner");
+    var rEl = byId("ghRepo");
+    var tEl = byId("ghToken");
+    var owner = (oEl && oEl.value ? oEl.value.trim() : "") || storageGet("nuv_owner") || "al-capilot";
+    var repo = (rEl && rEl.value ? rEl.value.trim() : "") || storageGet("nuv_repo") || "robot";
+    var token = (tEl && tEl.value ? tEl.value.trim() : "") || storageGet("nuv_token");
+    return { owner: owner, repo: repo, token: token };
+  }
+
+  function loadSettings() {
+    if (byId("ghOwner")) byId("ghOwner").value = storageGet("nuv_owner") || "al-capilot";
+    if (byId("ghRepo")) byId("ghRepo").value = storageGet("nuv_repo") || "robot";
+    if (byId("ghToken")) byId("ghToken").value = storageGet("nuv_token");
+    if (byId("aiApiKey")) byId("aiApiKey").value = storageGet("nuv_aikey");
+  }
+
+  function saveSettings() {
+    storageSet("nuv_owner", byId("ghOwner") ? byId("ghOwner").value.trim() : "");
+    storageSet("nuv_repo", byId("ghRepo") ? byId("ghRepo").value.trim() : "");
+    storageSet("nuv_token", byId("ghToken") ? byId("ghToken").value.trim() : "");
+    storageSet("nuv_aikey", byId("aiApiKey") ? byId("aiApiKey").value.trim() : "");
+    setStatus("PARAMETRLƏR SAXLANILDI", false);
+    logMsg("Parametrlər yadda saxlanıldı.");
+  }
+
+  // --- 360 LIDAR ---
+  var canvas = byId("lidarCanvas");
+  var ctx = canvas && canvas.getContext ? canvas.getContext("2d") : null;
+  var sweepAngle = 0;
+  var lidarRunning = true;
+  var obstacles = [];
+
+  function updateTelemetry() {
+    var sectors = { front: 12.0, right: 12.0, back: 12.0, left: 12.0 };
+    for (var i = 0; i < obstacles.length; i++) {
+      var o = obstacles[i];
+      var m = +(o.dist / 10.0).toFixed(1);
+      if (o.angle >= 315 || o.angle < 45) sectors.front = Math.min(sectors.front, m);
+      else if (o.angle >= 45 && o.angle < 135) sectors.right = Math.min(sectors.right, m);
+      else if (o.angle >= 135 && o.angle < 225) sectors.back = Math.min(sectors.back, m);
+      else sectors.left = Math.min(sectors.left, m);
+    }
+    if (byId("distFront")) byId("distFront").textContent = sectors.front + " m";
+    if (byId("distRight")) byId("distRight").textContent = sectors.right + " m";
+    if (byId("distBack")) byId("distBack").textContent = sectors.back + " m";
+    if (byId("distLeft")) byId("distLeft").textContent = sectors.left + " m";
+    return sectors;
+  }
+
+  function randomizeObstacles() {
+    obstacles = [];
+    for (var i = 0; i < 16; i++) {
+      obstacles.push({
+        angle: Math.random() * 360,
+        dist: 20 + Math.random() * 96,
+        size: 3.5 + Math.random() * 3.5
+      });
+    }
+    var sectors = updateTelemetry();
+    var keys = Object.keys(loadedPlugins);
+    for (var k = 0; k < keys.length; k++) {
+      try { loadedPlugins[keys[k]]({ event: "lidar_update", sectors: sectors, api: NUVCORE_API }); } catch (e) {}
+    }
+    renderLidarFrame();
+    logMsg("360° LiDAR: Yeni maneələr yaradıldı.");
+  }
+
+  function renderLidarFrame() {
+    if (!canvas || !ctx) return;
+    var cx = canvas.width / 2;
+    var cy = canvas.height / 2;
+    var maxR = 118;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#060d16";
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR + 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(0, 240, 181, 0.25)";
+    ctx.lineWidth = 1;
+    for (var r = 30; r <= maxR; r += 30) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(cx - maxR, cy); ctx.lineTo(cx + maxR, cy);
+    ctx.moveTo(cx, cy - maxR); ctx.lineTo(cx, cy + maxR);
+    ctx.stroke();
+
+    var rad = ((sweepAngle - 90) * Math.PI) / 180;
+    ctx.fillStyle = "rgba(0, 240, 181, 0.16)";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, maxR, rad - 0.45, rad);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "#00f0b5";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(rad) * maxR, cy + Math.sin(rad) * maxR);
+    ctx.stroke();
+
+    for (var i = 0; i < obstacles.length; i++) {
+      var o = obstacles[i];
+      var oRad = ((o.angle - 90) * Math.PI) / 180;
+      var ox = cx + Math.cos(oRad) * o.dist;
+      var oy = cy + Math.sin(oRad) * o.dist;
+      ctx.fillStyle = o.dist < 45 ? "#ff4d6d" : "#ffb020";
+      ctx.beginPath();
+      ctx.arc(ox, oy, o.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "#00f0b5";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function lidarLoop() {
+    if (lidarRunning) {
+      sweepAngle = (sweepAngle + 2.5) % 360;
+      renderLidarFrame();
+    }
+    requestAnimationFrame(lidarLoop);
+  }
+
+  function toggleLidar() {
+    lidarRunning = !lidarRunning;
+    if (byId("toggleLidarBtn")) byId("toggleLidarBtn").textContent = lidarRunning ? "Skanı Dayandır" : "Skanı Başlat";
+    logMsg(lidarRunning ? "360° LiDAR skanı aktivdir." : "360° LiDAR skanı dayandırıldı.");
+  }
+
+  // --- GITHUB BAZA & PLUGINS ---
+  function decodeBase64Utf8(b64) {
+    var clean = (b64 || "").replace(/\n/g, "");
+    return decodeURIComponent(escape(atob(clean)));
+  }
+
+  function encodeUtf8Base64(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+
+  function safeJsonParse(txt) {
+    try { return JSON.parse(txt); } catch (e) { return null; }
+  }
+
+  async function ghGetRaw(path) {
+    var cfg = getGhConfig();
+    if (!cfg.owner || !cfg.repo) throw new Error("GitHub Owner və ya Repo adı boşdur.");
+    var headers = { "Accept": "application/vnd.github+json" };
+    if (cfg.token) headers["Authorization"] = "Bearer " + cfg.token;
+
+    var res = await fetch("https://api.github.com/repos/" + cfg.owner + "/" + cfg.repo + "/contents/" + path, { headers: headers });
+    if (!res.ok) throw new Error(path + " -> HTTP " + res.status);
+    var data = await res.json();
+    if (Array.isArray(data)) return data;
+    var text = decodeBase64Utf8(data.content);
+    return { sha: data.sha, text: text, json: safeJsonParse(text) };
+  }
+
+  async function ghPutRaw(path, rawText, sha, commitMsg) {
+    var cfg = getGhConfig();
+    if (!cfg.token) throw new Error("GitHub Token daxil edilməyib.");
+
+    var body = { message: commitMsg, content: encodeUtf8Base64(rawText) };
+    if (sha) body.sha = sha;
+
+    var res = await fetch("https://api.github.com/repos/" + cfg.owner + "/" + cfg.repo + "/contents/" + path, {
+      method: "PUT",
+      headers: {
+        "Accept": "application/vnd.github+json",
+        "Authorization": "Bearer " + cfg.token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error("PUT " + path + " -> HTTP " + res.status);
+    return res.json();
+  }
+
+  function runPluginCodeSafe(name, code) {
+    var runner = new Function("api", "context", code);
+    runner(NUVCORE_API, { pluginName: name });
+    logMsg("Əlavə modul işə düşdü: plugins/" + name);
+  }
+
+  function renderPlugins() {
+    var el = byId("pluginList");
+    if (!el) return;
+    if (!dbState.plugins.length) {
+      el.innerHTML = '<div class="list-item"><span>Hələ əlavə modul yoxdur.</span></div>';
+      return;
+    }
+    var html = "";
+    for (var i = 0; i < dbState.plugins.length; i++) {
+      html += '<div class="list-item"><span>' + dbState.plugins[i].name + '</span><span class="pill">AKTİV</span></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  async function loadPluginsFromRepo() {
+    try {
+      logMsg("plugins/ qovluğu yoxlanılır...");
+      var files = await ghGetRaw("plugins");
+      if (!Array.isArray(files)) return;
+      dbState.plugins = [];
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        if (!f.name || !/\.js$/i.test(f.name)) continue;
+        var item = await ghGetRaw("plugins/" + f.name);
+        runPluginCodeSafe(f.name, item.text);
+        dbState.plugins.push({ name: f.name, sha: item.sha });
+      }
+      renderPlugins();
+    } catch (err) {
+      logMsg("PLUGINS OXUNMADI: " + err.message, "log-warn");
+    }
+  }
+
+  async function callGeminiText(apiKey, prompt, systemText) {
+    if (!apiKey) throw 
