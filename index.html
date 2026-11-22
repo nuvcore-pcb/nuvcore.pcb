@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NUVCORE.PCB — Avtonom Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+    body { background: #070b12; color: #e2ecf8; padding: 12px; line-height: 1.45; }
+    .container { max-width: 1020px; margin: 0 auto; }
+    .grid-2 { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+    .col { flex: 1 1 340px; min-width: 280px; }
+    header {
+      background: #0e1624; border: 1px solid #1e2d44; border-radius: 12px;
+      padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+      margin-bottom: 12px;
+    }
+    header h1 { font-size: 1.05rem; color: #00f0b5; }
+    .badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 999px; background: rgba(0, 240, 181, 0.14); color: #00f0b5; border: 1px solid #00f0b5; }
+    .badge.err { background: rgba(255, 77, 109, 0.18); color: #ff4d6d; border-color: #ff4d6d; }
+    .card { background: #0e1624; border: 1px solid #1e2d44; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    .card h2 { font-size: 0.88rem; color: #00f0b5; margin-bottom: 10px; text-transform: uppercase; }
+    label { display: block; font-size: 0.78rem; color: #8396b0; margin: 8px 0 4px; }
+    input, textarea, select {
+      width: 100%; background: #09101b; border: 1px solid #1e2d44; color: #e2ecf8;
+      padding: 9px 10px; border-radius: 8px; font-size: 0.88rem;
+    }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    button {
+      background: #00f0b5; color: #04130f; border: none; padding: 9px 12px;
+      border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer;
+    }
+    button.secondary { background: #162338; color: #e2ecf8; border: 1px solid #1e2d44; }
+    button.warn { background: #ffb020; color: #191002; }
+
+    #chatBox {
+      background: #060a11; border: 1px solid #1e2d44; border-radius: 8px;
+      padding: 10px; height: 210px; overflow-y: auto; margin-bottom: 8px;
+    }
+    .msg { padding: 8px 10px; border-radius: 8px; font-size: 0.84rem; margin-bottom: 8px; white-space: pre-wrap; word-break: break-word; }
+    .msg-user { background: #15263d; border: 1px solid #28456c; }
+    .msg-ai { background: #0b1f1c; border: 1px solid rgba(0, 240, 181, 0.35); }
+    .msg-err { background: rgba(255, 77, 109, 0.16); border: 1px solid #ff4d6d; color: #ffb3c1; }
+    .check-row { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #8396b0; margin: 6px 0; }
+    .check-row input { width: auto; }
+
+    pre.code-preview {
+      background: #060a11; border: 1px solid #1e2d44; border-radius: 8px;
+      padding: 8px; margin-top: 8px; max-height: 120px; overflow: auto;
+      font-size: 0.74rem; color: #9be7d0; white-space: pre-wrap; word-break: break-word;
+    }
+    .list-box { max-height: 130px; overflow-y: auto; margin-top: 8px; }
+    .list-item {
+      background: #09101b; border: 1px solid #1e2d44; border-radius: 8px;
+      padding: 8px 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem;
+    }
+    .pill { font-size: 0.72rem; padding: 2px 7px; border-radius: 999px; background: #162338; color: #00f0b5; }
+
+    .lidar-mini { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+    canvas#lidarCanvas {
+      width: 110px; height: 110px; background: #060d16;
+      border: 1px solid #00f0b5; border-radius: 50%; display: block;
+    }
+    .lidar-info { font-size: 0.8rem; color: #b9cae0; }
+
+    .files-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    .file-box { flex: 1 1 200px; background: #09101b; border: 1px solid #1e2d44; border-radius: 8px; padding: 10px; }
+    .file-box h3 { font-size: 0.82rem; color: #00f0b5; margin-bottom: 6px; }
+    .file-box pre { font-size: 0.74rem; color: #b9cae0; max-height: 110px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+
+    #consoleLog {
+      background: #05080e; border: 1px solid #1e2d44; border-radius: 8px;
+      padding: 10px; height: 140px; overflow-y: auto; font-size: 0.78rem; color: #7ef9d4;
+    }
+    .log-err { color: #ff4d6d; }
+    .log-warn { color: #ffb020; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>NUVCORE.PCB // AVTONOM AGENT</h1>
+    <span class="badge" id="sysStatus">AKTİV</span>
+  </header>
+
+  <div class="grid-2">
+    <div class="col">
+      <section class="card">
+        <h2>Agent Çatı</h2>
+        <div id="chatBox">
+          <div class="msg msg-ai">Əsas agent hazırdır. API açarı daxil edib saxlayın və yazın.</div>
+        </div>
+        <label class="check-row">
+          <input type="checkbox" id="includeLidarInChat" />
+          <span>Əlavə olaraq LiDAR dəyərlərini də göndər</span>
+        </label>
+        <textarea id="chatInput" rows="2" placeholder="Mesaj yazın..."></textarea>
+        <div class="btn-row">
+          <button id="sendChatBtn" type="button">Göndər</button>
+          <button class="secondary" id="clearChatBtn" type="button">Təmizlə</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="card">
+        <h2>GitHub Baza &amp; API Parametrləri</h2>
+        <label>GitHub Owner</label>
+        <input id="ghOwner" placeholder="al-capilot" />
+        <label>GitHub Repo</label>
+        <input id="ghRepo" value="robot" />
+        <label>GitHub Token</label>
+        <input id="ghToken" type="password" placeholder="ghp_..." />
+        <label>Gemini API Key</label>
+        <input id="aiApiKey" type="password" placeholder="AIza..." />
+        <div class="btn-row">
+          <button id="saveSettingsBtn" type="button">Parametrləri Saxla</button>
+          <button class="secondary" id="loadDbBtn" type="button">Bazanı Oxu</button>
+          <button class="warn" id="runCycleBtn" type="button">Dövr Yaz</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>Özünə Yeni Modul Yazdır (plugins/*.js)</h2>
+    <div class="grid-2">
+      <div class="col">
+        <label>Modul Adı</label>
+        <input id="pluginName" placeholder="auto_logger" />
+      </div>
+      <div class="col">
+        <label>Yeni Bacarıq Məqsədi</label>
+        <input id="pluginGoal" placeholder="Məs: Tapşırıqlar oxunanda konsola xülasə yazsın" />
+      </div>
+    </div>
+    <label class="check-row">
+      <input type="checkbox" id="allowPluginExecution" checked />
+      <span>Sandbox-da sınaqdan keçir</span>
+    </label>
+    <label class="check-row">
+      <input type="checkbox" id="allowPluginWrite" checked />
+      <span>GitHub plugins/ qovluğuna yaz</span>
+    </label>
+    <div class="btn-row">
+      <button class="secondary" id="previewPluginBtn" type="button">Önizlə</button>
+      <button class="warn" id="approvePluginBtn" type="button">Təsdiqlə və Saxla</button>
+    </div>
+    <pre class="code-preview" id="pluginPreview">// Modul kodu burada görünəcək...</pre>
+    <div class="list-box" id="pluginList">
+      <div class="list-item"><span>Modul yoxdur.</span></div>
+    </div>
+  </section>
+
+  <div class="grid-2">
+    <div class="col">
+      <section class="card">
+        <h2>Tapşırıqlar (projects.json)</h2>
+        <label>Yeni Tapşırıq</label>
+        <input id="taskTitle" placeholder="Tapşırıq adı" />
+        <label>Status</label>
+        <select id="taskStatus">
+          <option value="in_progress">in_progress</option>
+          <option value="todo">todo</option>
+          <option value="done">done</option>
+        </select>
+        <div class="btn-row">
+          <button id="addTaskBtn" type="button">Əlavə Et və Yaz</button>
+        </div>
+        <div class="list-box" id="taskList"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="card">
+        <h2>Əlavə Sensor (LiDAR Simulyasiya)</h2>
+        <div class="lidar-mini">
+          <canvas id="lidarCanvas" width="110" height="110"></canvas>
+          <div class="lidar-info">
+            <div id="lidarText">Ön: -- | Sağ: -- | Arxa: -- | Sol: --</div>
+            <div class="btn-row">
+              <button class="secondary" id="newObsBtn" type="button">Yenilə</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>Baza Faylları</h2>
+    <div class="files-grid">
+      <div class="file-box"><h3>projects.json</h3><pre id="viewProjects">Oxunmayıb...</pre></div>
+      <div class="file-box"><h3>rules.json</h3><pre id="viewRules">Oxunmayıb...</pre></div>
+      <div class="file-box"><h3>logs.json</h3><pre id="viewLogs">Oxunmayıb...</pre></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Sistem Konsolu</h2>
+    <div id="consoleLog"></div>
+  </section>
+</div>
+
+<script>
+  function byId(id) { return document.getElementById(id); }
+
+  function logMsg(msg, type) {
+    var box = byId("consoleLog");
+    if (!box) return;
+    var line = document.createElement("div");
+    if (type) line.className = type;
+    line.textContent = "[" + new Date().toLocaleTimeString() + "] " + msg;
+    box.insertBefore(line, box.firstChild);
+  }
+
+  function setStatus(text, isErr) {
+    var st = byId("sysStatus");
+    if (!st) return;
+    st.textContent = text;
+    st.className = isErr ? "badge err" : "badge";
+  }
+
+  window.onerror = function (message, source, lineno) {
+    setStatus("XƏTA: Sətir " + lineno, true);
+    logMsg("JS XƏTA (" + lineno + "): " + message, "log-err");
+    return false;
+  };
+
+  function storageGet(k) {
+    try { return window.localStorage.getItem(k) || ""; } catch (e) { return ""; }
+  }
+  function storageSet(k, v) {
+    try { window.localStorage.setItem(k, v); } catch (e) {}
+  }
+
+  var generatedPluginCode = "";
+  var dbState = {
+    projects: { sha: null, items: [], raw: null },
+    rules: { sha: null, data: null },
+    logs: { sha: null, items: [], raw: null },
+    plugins: []
+  };
+
+  function getApiKey() {
+    var el = byId("aiApiKey");
+    return ((el && el.value) ? el.value.trim() : "") || storageGet("nuv_aikey");
+  }
+
+  function getGhConfig() {
+    var oEl = byId("ghOwner");
+    var rEl = byId("ghRepo");
+    var tEl = byId("ghToken");
+    return {
+      owner: ((oEl && oEl.value) ? oEl.value.trim() : "") || storageGet("nuv_owner") || "al-capilot",
+      repo: ((rEl && rEl.value) ? rEl.value.trim() : "") || storageGet("nuv_repo") || "robot",
+      token: ((tEl && tEl.value) ? tEl.value.trim() : "") || storageGet("nuv_token")
+    };
+  }
+
+  function loadSettings() {
+    if (byId("ghOwner")) byId("ghOwner").value = storageGet("nuv_owner") || "al-capilot";
+    if (byId("ghRepo")) byId("ghRepo").value = storageGet("nuv_repo") || "robot";
+    if (byId("ghToken")) byId("ghToken").value = storageGet("nuv_token");
+    if (byId("aiApiKey")) byId("aiApiKey").value = storageGet("nuv_aikey");
+  }
+
+  function saveSettings() {
+    storageSet("nuv_owner", byId("ghOwner") ? byId("ghOwner").value.trim() : "");
+    storageSet("nuv_repo", byId("ghRepo") ? byId("ghRepo").value.trim() : "");
+    storageSet("nuv_token", byId("ghToken") ? byId("ghToken").value.trim() : "");
+    storageSet("nuv_aikey", byId("aiApiKey") ? byId("aiApiKey").value.trim() : "");
+    setStatus("PARAMETRLƏR SAXLANILDI", false);
+    logMsg("Parametrlər yadda saxlanıldı.");
+  }
+
+  // --- YÜNGÜL LİDAR (XƏTA VERSƏ BELƏ AGENTİ SAXLAMIR) ---
+  var lidarSectors = { front: 12.0, right: 12.0, back: 12.0, left: 12.0 };
+  var lidarAngle = 0;
+
+  function updateLidarSample() {
+    try {
+      lidarSectors = {
+        front: +(1.2 + Math.random() * 10).toFixed(1),
+        right: +(1.2 + Math.random() * 10).toFixed(1),
+        back: +(1.2 + Math.random() * 10).toFixed(1),
+        left: +(1.2 + Math.random() * 10).toFixed(1)
+      };
+      if (byId("lidarText")) {
+        byId("lidarText").textContent =
+          "Ön: " + lidarSectors.front + "m | Sağ: " + lidarSectors.right + "m | Arxa: " + lidarSectors.back + "m | Sol: " + lidarSectors.left + "m";
+      }
+      var c = byId("lidarCanvas");
+      if (c && c.getContext) {
+        var g = c.getContext("2d");
+        g.clearRect(0, 0, c.width, c.height);
+        g.strokeStyle = "rgba(0,240,181,0.35)";
+        g.beginPath(); g.arc(55, 55, 45, 0, Math.PI * 2); g.stroke();
+        var rad = ((lidarAngle - 90) * Math.PI) / 180;
+        g.strokeStyle = "#00f0b5";
+        g.beginPath(); g.moveTo(55, 55); g.lineTo(55 + Math.cos(rad) * 45, 55 + Math.sin(rad) * 45); g.stroke();
+      }
+    } catch (e) {}
+    return lidarSectors;
+  }
+
+  // --- GITHUB ---
+  function decodeBase64Utf8(b64) {
+    var clean = (b64 || "").replace(/\n/g, "");
+    return decodeURIComponent(escape(atob(clean)));
+  }
+
+  function encodeUtf8Base64(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+
+  function safeJsonParse(txt) {
+    try { return JSON.parse(txt); } catch (e) { return null; }
+  }
+
+  function ghGetRaw(path) {
+    var cfg = getGhConfig();
+    if (!cfg.owner || !cfg.repo) return Promise.reject(new Error("Owner və ya Repo boşdur."));
+    var headers = { "Accept": "application/vnd.github+json" };
+    if (cfg.token) headers["Authorization"] = "Bearer " + cfg.token;
+
+    return fetch("https://api.github.com/repos/" + cfg.owner + "/" + cfg.repo + "/contents/" + path, { headers: headers })
+      .then(function (res) {
+        if (!res.ok) throw new Error(path + " -> HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (Array.isArray(data)) return data;
+        var text = decodeBase64Utf8(data.content);
+        return { sha: data.sha, text: text, json: safeJsonParse(text) };
+      });
+  }
+
+  function ghPutRaw(path, rawText, sha, commitMsg) {
+    var cfg = getGhConfig();
+    if (!cfg.token) return Promise.reject(new Error("GitHub Token daxil edilməyib."));
+    var body = { message: commitMsg, content: encodeUtf8Base64(rawText) };
+    if (sha) body.sha = sha;
+
+    return fetch("https://api.github.com/repos/" + cfg.owner + "/" + cfg.repo + "/contents/" + path, {
+      method: "PUT",
+      headers: {
+        "Accept": "application/vnd.github+json",
+        "Authorization": "Bearer " + cfg.token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      if (!res.ok) throw new Error("PUT " + path + " -> HTTP " + res.status);
+      return res.json();
+    });
+  }
+
+  // --- GEMINI & PLUGINS ---
+  function callGeminiText(apiKey, prompt, systemText) {
+    if (!apiKey) return Promise.reject(new Error("AI API Key daxil edilməyib."));
+    var models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+
+    function tryModel(idx, lastErr) {
+      if (idx >= models.length) return Promise.reject(lastErr || new Error("Gemini sorğusu alınmadı."));
+      var model = models[idx];
+      var payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+      if (systemText) payload.systemInstruction = { parts: [{ text: systemText }] };
+      var url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + encodeURIComponent(apiKey);
+
+      return fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            return res.text().then(function (t) {
+              throw new Error(model + " HTTP " + res.status + ": " + t.slice(0, 120));
+            });
+          }
+          return res.json();
+        })
+        .then(function (data) {
+          var cand = data && data.candidates && data.candidates[0];
+          var parts = (cand && cand.content && cand.content.parts) ? cand.content.parts : [];
+          var out = "";
+          for (var p = 0; p < parts.length; p++) {
+            if (parts[p] && parts[p].text) out += parts[p].text;
+          }
+          out = out.trim();
+          if (!out) throw new Error(model + " boş cavab qaytardı.");
+          return out;
+        })
+        .catch(function (err) { return tryModel(idx + 1, err); });
+    }
+    return tryModel(0, null);
+  }
+
+  function isPluginCodeSafe(code) {
+    var blocked = [
+      "document.", "window.", "localStorage", "sessionStorage",
+      "eval(", "new Function", "__proto__", "fetch(",
+      "XMLHttpRequest", "WebSocket", "importScripts", "indexedDB"
+    ];
+    var lower = String(code || "").toLowerCase();
+    for (var i = 0; i < blocked.length; i++) {
+      if (lower.indexOf(blocked[i].toLowerCase()) !== -1) return false;
+    }
+    return true;
+  }
+
+  function previewGeneratedPlugin() {
+    var key = getApiKey();
+    var nameInput = byId("pluginName");
+    var goalInput = byId("pluginGoal");
+    var name = ((nameInput && nameInput.value) ? nameInput.value.trim() : "custom_skill")
+      .toLowerCase().replace(/[^a-z0-9_]/g, "_");
+    var goal = (goalInput && goalInput.value) ? goalInput.value.trim() : "";
+
+    if (!key) return appendChatBubble("AI API Key daxil edilməyib.", "err");
+    if (!goal) return appendChatBubble("Funksiya məqsədini yazın.", "err");
+
+    setStatus("KOD HAZIRLANIR...", false);
+    callGeminiText(
+      key,
+      "Yalnız təhlükəsiz JavaScript yaz. api: api.log(msg), api.getProjects(), api.addLog(obj), api.registerAction(name, fn). Məqsəd: " + goal,
+      "Yalnız təmiz JavaScript qaytar. Markdown və izahat yazma."
+    ).then(function (code) {
+      generatedPluginCode = String(code || "").replace(/^```(?:javascript|js)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      if (byId("pluginPreview")) byId("pluginPreview").textContent = generatedPluginCode;
+      setStatus("ÖNİZLƏMƏ HAZIRDIR", false);
+      appendChatBubble("Önizləmə hazırdır: " + name + ".js", "ai");
+    }).catch(function (error) {
+      setStatus("MODUL XƏTASI", true);
+      appendChatBubble(error.message, "err");
+    });
+  }
+
+  function executePluginInSandbox(name, code) {
+    var safeCode = String(code || "").replace(/<\/script>/gi, "<\\/script>");
+    var source =
+      "<!doctype html><html><body><script>" +
+      "var api = {" +
+        "log:function(msg,type){parent.postMessage({type:'plugin-log',name:" + JSON.stringify(name) + ",message:String(msg),logType:type||''},'*');}," +
+        "getProjects:function(){return [];}," +
+        "addLog:function(entry){parent.postMessage({type:'plugin-add-log',name:" + JSON.stringify(name) + ",entry:entry},'*');}," +
+        "registerAction:function(actionName,fn){parent.postMessage({type:'plugin-action',name:String(actionName),action:'registered'},'*');}" +
+      "};" +
+      "try {" + safeCode + "} catch(error) {" +
+        "parent.postMessage({type:'plugin-error',name:" + JSON.stringify(name) + ",message:error.message},'*');" +
+      "}" +
+      "<\/script><\/body><\/html>";
+
+    var frame = document.createElement("iframe");
+    frame.sandbox = "allow-scripts";
+    frame.style.display = "none";
+    frame.srcdoc = source;
+    document.body.appendChild(frame);
+    setTimeout(function () { if (frame.parentNode) frame.parentNode.removeChild(frame); }, 30000);
+  }
+
+  function renderPlugins() {
+    var el = byId("pluginList");
+    if (!el) return;
+    if (!dbState.plugins.length) {
+      el.innerHTML = '<div class="list-item"><span>Modul yoxdur.</span></div>';
+      return;
+    }
+    var html = "";
+    for (var i = 0; i < dbState.plugins.length; i++) {
+      html += '<div class="list-item"><span>' + dbState.plugins[i].name + '</span><span class="pill">AKTİV</span></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function saveGeneratedPlugin(name, code) {
+    return ghGetRaw("plugins/" + name)
+      .then(function (existing) { return existing.sha; })
+      .catch(function () { return null; })
+      .then(function (sha) { return ghPutRaw("plugins/" + name, code, sha, "Add plugin " + name); })
+      .then(function (saved) {
+        var nextList = [];
+        for (var i = 0; i < dbState.plugins.length; i++) {
+          if (dbState.plugins[i].name !== name) nextList.push(dbState.plug
