@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NUVCORE.PCB — Avtonom Layihə Agenti</title>
+  <style>
+    body { background: #070b12; color: #e2ecf8; font-family: sans-serif; padding: 12px; line-height: 1.45; }
+    .wrap { max-width: 820px; margin: 0 auto; }
+    .card { background: #0e1624; border: 1px solid #1e2d44; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+    h3 { color: #00f0b5; margin: 0 0 10px; font-size: 0.95rem; }
+    label { display: block; font-size: 0.78rem; color: #8396b0; margin-top: 8px; }
+    input, textarea, select {
+      width: 100%; margin-top: 4px; padding: 8px 10px; border-radius: 6px;
+      border: 1px solid #1e2d44; background: #09101b; color: #fff; box-sizing: border-box;
+    }
+    input.need-key { border-color: #ff4d6d; box-shadow: 0 0 0 2px rgba(255, 77, 109, 0.25); }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .col { flex: 1 1 220px; }
+    .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    button {
+      background: #00f0b5; color: #04130f; border: 0;
+      padding: 9px 13px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.84rem;
+    }
+    button.sec { background: #162338; color: #e2ecf8; border: 1px solid #1e2d44; }
+    #chatBox {
+      background: #060a11; border: 1px solid #1e2d44; border-radius: 8px;
+      padding: 10px; height: 210px; overflow-y: auto; margin-bottom: 8px;
+    }
+    .msg { padding: 8px 10px; border-radius: 8px; margin-bottom: 8px; font-size: 0.85rem; white-space: pre-wrap; word-break: break-word; }
+    .msg-u { background: #15263d; border: 1px solid #28456c; }
+    .msg-a { background: #0b1f1c; border: 1px solid rgba(0, 240, 181, 0.35); }
+    .msg-e { background: rgba(255, 77, 109, 0.16); border: 1px solid #ff4d6d; color: #ffb3c1; }
+    pre {
+      background: #060a11; border: 1px solid #1e2d44; padding: 10px;
+      border-radius: 6px; margin-top: 10px; white-space: pre-wrap; word-break: break-word; font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h3>1. API Açarları və Aktiv Model (1 TB Robot Arxitekturası)</h3>
+      <div class="row">
+        <div class="col">
+          <label>Gemini API Key (Mövcud açarınız)</label>
+          <input id="aiKey" type="password" placeholder="AIza... açarını daxil edin" />
+        </div>
+        <div class="col">
+          <label>Aktiv Model (Avtomatik tapılır)</label>
+          <select id="modelSelect">
+            <option value="">Açar saxlananda avtomatik yüklənəcək...</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>GitHub Token (Baza/Modul yazmaq üçün)</label>
+          <input id="ghToken" type="password" placeholder="ghp_... tokeni daxil edin" />
+        </div>
+        <div class="col">
+          <label>GitHub Owner / Repo</label>
+          <div class="row">
+            <div class="col"><input id="ghOwner" value="al-capilot" /></div>
+            <div class="col"><input id="ghRepo" value="robot" /></div>
+          </div>
+        </div>
+      </div>
+      <div class="btns">
+        <button id="saveKeysBtn" type="button">Açarları Saxla və Modelləri Tap</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>2. Agent Çatı</h3>
+      <div id="chatBox">
+        <div class="msg msg-a">Sorğu: Mövcud Gemini API Key açarınızı daxil edib "Açarları Saxla və Modelləri Tap" düyməsini basın.</div>
+      </div>
+      <textarea id="chatInput" rows="2" placeholder="Mesaj yazın (məs: 1 TB yaddaşlı robot üçün layihə planı qur)..."></textarea>
+      <div class="btns">
+        <button id="sendChatBtn" type="button">Göndər</button>
+        <button class="sec" id="clearChatBtn" type="button">Çatı Təmizlə</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>3. Layihə Qur və Özünü Genişləndir (plugins/*.js + projects.json)</h3>
+      <div class="row">
+        <div class="col">
+          <label>Layihə Adı</label>
+          <input id="projectTitle" placeholder="Məs: 1TB Robot Telemetriya və Xəritə İdarəetməsi" />
+        </div>
+        <div class="col">
+          <label>Yeni Modul Adı</label>
+          <input id="skillName" placeholder="məs: storage_manager" />
+        </div>
+      </div>
+      <label>Yeni Bacarıq / Layihə Məqsədi</label>
+      <textarea id="goal" rows="2" placeholder="Məs: 1 TB yaddaş istifadəsini və layihə statuslarını yoxlayan modul yaz"></textarea>
+      <div class="btns">
+        <button id="expandBtn" type="button">Layihə Qur və Genişləndir</button>
+      </div>
+      <pre id="out">Hazırdır.</pre>
+    </div>
+  </div>
+
+  <script>
+    function byId(id) { return document.getElementById(id); }
+
+    function addMsg(text, cls) {
+      var box = byId("chatBox");
+      if (!box) return;
+      var div = document.createElement("div");
+      div.className = "msg " + (cls || "msg-a");
+      div.textContent = text;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function setOut(text) {
+      if (byId("out")) byId("out").textContent = text;
+    }
+
+    function getAiKey() {
+      var val = byId("aiKey") ? byId("aiKey").value.trim() : "";
+      if (val) return val;
+      try { return localStorage.getItem("nuv_ai_key") || ""; } catch (e) { return ""; }
+    }
+
+    function getGhToken() {
+      var val = byId("ghToken") ? byId("ghToken").value.trim() : "";
+      if (val) return val;
+      try { return localStorage.getItem("nuv_gh_token") || ""; } catch (e) { return ""; }
+    }
+
+    function promptForApiKey() {
+      var inp = byId("aiKey");
+      if (inp) {
+        inp.className = "need-key";
+        inp.focus();
+      }
+      addMsg("SORĞU: Gemini API Key daxil edilməyib! Yuxarıdakı xanaya açarı daxil edib 'Açarları Saxla və Modelləri Tap' basın.", "msg-e");
+    }
+
+    function fetchAvailableModels(apiKey) {
+      var sel = byId("modelSelect");
+      if (!apiKey) return Promise.reject(new Error("API Key boşdur."));
+      return fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(apiKey))
+        .then(function (r) {
+          if (!r.ok) {
+            return r.text().then(function (t) {
+              throw new Error("Modellər oxunmadı (HTTP " + r.status + "): " + t.slice(0, 120));
+            });
+          }
+          return r.json();
+        })
+        .then(function (data) {
+          var list = (data && Array.isArray(data.models)) ? data.models : [];
+          var usable = [];
+          for (var i = 0; i < list.length; i++) {
+            var m = list[i];
+            var methods = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
+            if (methods.indexOf("generateContent") !== -1) {
+              usable.push(String(m.name || "").replace(/^models\//, ""));
+            }
+          }
+          if (!usable.length) {
+            throw new Error("Bu açar üçün uyğun generateContent modeli tapılmadı.");
+          }
+          usable.sort(function (a, b) {
+            var aFlash = /flash/i.test(a) ? 0 : 1;
+            var bFlash = /flash/i.test(b) ? 0 : 1;
+            return aFlash - bFlash;
+          });
+
+          if (sel) {
+            sel.innerHTML = "";
+            for (var j = 0; j < usable.length; j++) {
+              var opt = document.createElement("option");
+              opt.value = usable[j];
+              opt.textContent = usable[j];
+              sel.appendChild(opt);
+            }
+            var savedModel = "";
+            try { savedModel = localStorage.getItem("nuv_ai_model") || ""; } catch (e) {}
+            if (savedModel && usable.indexOf(savedModel) !== -1) {
+              sel.value = savedModel;
+            } else {
+              sel.value = usable[0];
+            }
+          }
+          return usable;
+        });
+    }
+
+    function saveSettings() {
+      var ai = byId("aiKey") ? byId("aiKey").value.trim() : "";
+      var gh = byId("ghToken") ? byId("ghToken").value.trim() : "";
+      var ow = byId("ghOwner") ? byId("ghOwner").value.trim() : "al-capilot";
+      var rp = byId("ghRepo") ? byId("ghRepo").value.trim() : "robot";
+
+      try {
+        localStorage.setItem("nuv_ai_key", ai);
+        localStorage.setItem("nuv_gh_token", gh);
+        localStorage.setItem("nuv_gh_owner", ow);
+        localStorage.setItem("nuv_gh_repo", rp);
+      } catch (e) {}
+
+      if (byId("aiKey")) byId("aiKey").className = ai ? "" : "need-key";
+      if (!ai) {
+        promptForApiKey();
+        return;
+      }
+
+      addMsg("Açar yoxlanılır və aktiv modellər siyahısı yüklənir...", "msg-a");
+      fetchAvailableModels(ai)
+        .then(function (models) {
+          try { localStorage.setItem("nuv_ai_model", models[0]); } catch (e) {}
+          addMsg("Hazırdır! Aktiv model seçildi: " + models[0] + " (Cəmi " + models.length + " aktiv model tapıldı).", "msg-a");
+        })
+        .catch(function (err) {
+          addMsg("Açar / Model yoxlama xətası: " + err.message, "msg-e");
+        });
+    }
+
+    function loadSettings() {
+      try {
+        var ai = localStorage.getItem("nuv_ai_key") || "";
+        var gh = localStorage.getItem("nuv_gh_token") || "";
+        var ow = localStorage.getItem("nuv_gh_owner") || "";
+        var rp = localStorage.getItem("nuv_gh_repo") || "";
+        if (byId("aiKey") && ai) byId("aiKey").value = ai;
+        if (byId("ghToken") && gh) byId("ghToken").value = gh;
+        if (byId("ghOwner") && ow) byId("ghOwner").value = ow;
+        if (byId("ghRepo") && rp) byId("ghRepo").value = rp;
+        if (!ai && byId("aiKey")) {
+          byId("aiKey").className = "need-key";
+        } else if (ai) {
+          fetchAvailableModels(ai).catch(function () {});
+        }
+      } catch (e) {}
+    }
+
+    function callGemini(apiKey, prompt, sysInstruction) {
+      var sel = byId("modelSelect");
+      var chosen = (sel && sel.value) ? sel.value.trim() : "";
+
+      var ensureModel = chosen
+        ? Promise.resolve([chosen])
+        : fetchAvailableModels(apiKey);
+
+      return ensureModel.then(function (list) {
+        var modelName = list[0];
+        try { localStorage.setItem("nuv_ai_model", modelName); } catch (e) {}
+
+        var url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+          encodeURIComponent(modelName) + ":generateContent?key=" + encodeURIComponent(apiKey);
+
+        var body = {
+          contents: [{ role: "user", parts: [{ text: prompt }] }]
+        };
+        if (sysInstruction) {
+          body.systemInstruction = { parts: [{ text: sysInstruction }] };
+        }
+
+        return fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        })
+          .then(function (r) {
+            if (!r.ok) {
+              return r.text().then(function (t) {
+                throw new Error(modelName + " -> HTTP " + r.status + ": " + t.slice(0, 150));
+              });
+            }
+            return r.json();
+          })
+          .then(function (j) {
+            var txt = j && j.candidates && j.candidates[0] && j.candidates[0].content &&
+              j.candidates[0].content.parts && j.candidates[0].content.parts[0] && j.candidates[0].content.parts[0].text;
+            if (!txt) throw new Error(modelName + " boş cavab qaytardı.");
+            return txt.trim();
+          });
+      });
+    }
+
+    function b64ToUtf8(b64) {
+      return decodeURIComponent(escape(atob((b64 || "").replace(/\n/g, ""))));
+    }
+
+    function utf8ToB64(str) {
+      return btoa(unescape(encodeURIComponent(str)));
+    }
+
+    function ghGet(owner, repo, token, path) {
+      var headers = { "Accept": "application/vnd.github+json" };
+      if (token) headers["Authorization"] = "Bearer " + token;
+      return fetch("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + path, { headers: headers })
+        .then(function (r) {
+          if (!r.ok) throw new Error(path + " -> HTTP " + r.status);
+          return r.json();
+        });
+    }
+
+    function ghPut(owner, repo, token, path, text, sha, msg) {
+      var body = { message: msg, content: utf8ToB64(text) };
+      if (sha) body.sha = sha;
+      return fetch("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + path, {
+        method: "PUT",
+        headers: {
+          "Accept": "application/vnd.github+json",
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      }).then(function (r) {
+        if (!r.ok) throw new Error("PUT " + path + " -> HTTP " + r.status);
+        return r.json();
+      });
+    }
+
+    function handleAgentCommands(replyText) {
+      if (!replyText) return;
+
+      // 1. Sayt yoxlama: [[CHECK_URL: https://...]]
+      var urlMatch = replyText.match(/\[\[CHECK_URL:\s*(https?:\/\/[^\s\]]+)\s*\]\]/i);
+      if (urlMatch && urlMatch[1]) {
+        var targetUrl = urlMatch[1].trim();
+        addMsg("Sayt yoxlanılır: " + targetUrl, "msg-a");
+        fetch(targetUrl)
+          .then(function (r) {
+            return r.text().then(function (html) {
+              var titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+              var pageTitle = titleMatch ? titleMatch[1].trim() : "(başlıq yoxdur)";
+              addMsg("Sayt cavabı -> HTTP " + r.status + " | Başlıq: " + pageTitle + " | Həcm: " + html.length + " simvol", "msg-a");
+            });
+          })
+          .catch(function (err) {
+            addMsg("Sayt yoxlanmadı (CORS və ya şəbəkə): " + err.message, "msg-e");
+          });
+      }
+
+      // 2. Layihə əlavə etmə: [[ADD_PROJECT: {...}]]
+      var projMatch = replyText.match(/\[\[ADD_PROJECT:\s*(\{[\s\S]*?\})\s*\]\]/i);
+      if (projMatch && projMatch[1]) {
+        var ghToken = getGhToken();
+        var owner = byId("ghOwner") ? byId("ghOwner").value.trim() : "al-capilot";
+        var repo = byId("ghRepo") ? byId("ghRepo").value.trim() : "robot";
+        var parsed = null;
+        try { parsed = JSON.parse(projMatch[1]); } catch (e) {
+          addMsg("Layihə JSON oxunmadı: " + e.message, "msg-e");
+          return;
+        }
+        if (!ghToken) {
+          addMsg("Layihəni bazaya yazmaq üçün GitHub Token daxil edin.", "msg-e");
+          return;
+        }
+        addMsg("Layihə memory/projects.json faylına yazılır...", "msg-a");
+        ghGet(owner, repo, ghToken, "memory/projects.json")
+          .then(function (d) {
+            var cur = JSON.parse(b64ToUtf8(d.content));
+            var list = Array.isArray(cur) ? cur : (Array.isArray(cur.projects) ? cur.projects : []);
+            list.unshift({
+              id: "prj_" + Date.now(),
+              title: parsed.title || "Yeni Layihə",
+              next_step: parsed.next_step || "",
+              storage_tb: 1,
+              status: parsed.status || "in_progress",
+              updated_at: new Date().toISOString()
+            });
+            return ghPut(owner, repo, ghToken, "memory/projects.json", JSON.stringify(list, null, 2), d.sha, "Agent add project");
+          })
+          .then(function () {
+            addMsg("Layihə bazaya yazıldı: " + (parsed.title || "Yeni Layihə"), "msg-a");
+          })
+          .catch(function (err) {
+            addMsg("Baza yazma xətası: " + err.message, "msg-e");
+          });
+      }
+
+      // 3. Özünü genişləndirmə: [[CREATE_PLUGIN: {"name":"...","goal":"..."}]]
+      var plugMatch = replyText.match(/\[\[CREATE_PLUGIN:\s*(\{[\s\S]*?\})\s*\]\]/i);
+      if (plugMatch && plugMatch[1]) {
+        var apiKey = getAiKey();
+        var ghToken2 = getGhToken();
+        var owner2 = byId("ghOwner") ? byId("ghOwner").value.trim() : "al-capilot";
+        var repo2 = byId("ghRepo") ? byId("ghRepo").value.trim() : "robot";
+        var pData = null;
+
+        try { pData = JSON.parse(plugMatch[1]); } catch (e) {
+          addMsg("Plugin JSON oxunmadı: " + e.message, "msg-e");
+          return;
+        }
+
+        var fileName = ((pData.name || "auto_skill")
+          .toLowerCase().replace(/[^a-z0-9_]/g, "_")) + ".js";
+        var goalText = pData.goal || "1 TB yaddaşlı robot üçün yardımçı modul";
+
+        if (!apiKey || !ghToken2) {
+          addMsg("Modul yaradıb GitHub-a yazmaq üçün həm Gemini API Key, həm də GitHub Token lazımdır.", "msg-e");
+          return;
+        }
+
+        addMsg("Yeni modul hazırlanır: plugins/" + fileName + "...", "msg-a");
+        callGemini(
+          apiKey,
+          "1 TB yaddaşlı robot və layihə idarəetməsi üçün təmiz JavaScript modulu yaz. Məqsəd: " + goalText,
+          "Yalnız təmiz JavaScript kodu qaytar. Markdown və izahat yazma."
+        )
+          .then(function (raw) {
+            var code = raw.replace(/^```(?:javascript|js)?\s*/i, "").replace(/\s*```$/i, "").trim();
+            new Function("api", code);
+            return ghGet(owner2, repo2, ghToken2, "plugins/" + fileName)
+              .then(function (d) { return d.sha; })
+              .catch(function () { return null; })
+              .then(function (sha) {
+                return ghPut(owner2, repo2, ghToken2, "plugins/" + fileName, code, sha, "Chat self-expand: " + fileName);
+              });
+          })
+          .then(function () {
+            addMsg("Özünü genişləndirmə tamamlandı! Fayl yazıldı: plugins/" + fileName, "msg-a");
+          })
+          .catch(function (err) {
+            addMsg("Genişləndirmə xətası: " + err.message, "msg-e");
+          });
+      }
+    }
+
+    function sendChat() {
+      var inp = byId("chatInput");
+      var text = inp ? inp.value.trim() : "";
+      if (!text) return;
+
+      addMsg(text, "msg-u");
+      if (inp) inp.value = "";
+
+      var apiKey = getAiKey();
+      if (!apiKey) {
+        promptForApiKey();
+        return;
+      }
+
+      addMsg("Cavab hazırlanır...", "msg-a");
+      var sys = "Sən NUVCORE.PCB layihə idarəetmə və avtonom robot agentisən (robot yaddaşı: 1 TB). " +
+        "Azərbaycan dilində aydın və icra yönümlü cavab ver. " +
+        "Əgər sayt yoxlamaq tələb olunarsa, cavabın sonuna [[CHECK_URL: https://...]] yaz. " +
+        "Əgər yeni layihə və ya tapşırıq əlavə etmək tələb olunarsa, cavabın sonuna [[ADD_PROJECT: {\"title\":\"...\",\"next_step\":\"...\",\"status\":\"in_progress\"}]] yaz. " +
+        "Əgər özünə yeni modul/bacarıq əlavə etmək və ya özünü genişləndirmək tələb olunarsa, cavabın sonuna [[CREATE_PLUGIN: {\"name\":\"modul_adi\",\"goal\":\"məqsəd\"}]] yaz.";
+
+      callGemini(apiKey, text, sys)
+        .then(function (reply) {
+          addMsg(reply, "msg-a");
+          handleAgentCommands(reply);
+        })
+        .catch(function (err) {
+          addMsg("Xəta: " + err.message, "msg-e");
+        });
+    }
+
+    function expandProjectAndSelf() {
+      var apiKey = getAiKey();
+      if (!apiKey) {
+        promptForApiKey();
+        setOut("SORĞU: Əvvəlcə Gemini API Key daxil edin.");
+        return;
+      }
+
+      var ghToken = getGhToken();
+      var owner = byId("ghOwner") ? byId("ghOwner").value.trim() : "al-capilot";
+      var repo = byId("ghRepo") ? byId("ghRepo").value.trim() : "robot";
+      var projectTitle = byId("projectTitle") ? byId("projectTitle").value.trim() : "";
+      var skillName = ((byId("skillName") ? byId("skillName").value.trim() : "") || "auto_skill")
+        .toLowerCase().replace(/[^a-z0-9_]/g, "_") + ".js";
+      var goal = byId("goal") ? byId("goal").value.trim() : "";
+
+      if (!goal) {
+        setOut("Yeni bacarıq / layihə məqsədini yazın.");
+        return;
+      }
+
+      setOut("1/2 Yeni modul kodu hazırlanır...");
+      var code = "";
+
+      callGemini(
+        apiKey,
+        "1 TB yaddaşlı robot və layihə idarəetməsi üçün təmiz JavaScript modulu yaz. Məqsəd: " + goal,
+        "Yalnız təmiz JavaScript kodu qaytar. Markdown və izahat yazma."
+      )
+        .then(function (raw) {
+          code = raw.replace(/^```(?:javascript|js)?\s*/i, "").replace(/\s*```$/i, "").trim();
+          new Function("api", code);
+
+          if (!ghToken || !owner || !repo) {
+         
