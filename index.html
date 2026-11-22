@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NUVCORE.PCB — Səhifədaxili Agent</title>
+  <style>
+    body { background: #070b12; color: #e2ecf8; font-family: sans-serif; padding: 14px; line-height: 1.45; }
+    .box { max-width: 760px; margin: 0 auto; background: #0e1624; border: 1px solid #1e2d44; border-radius: 10px; padding: 14px; }
+    h3 { color: #00f0b5; margin-bottom: 10px; }
+    label { display: block; font-size: 0.78rem; color: #8396b0; margin-top: 8px; }
+    input, textarea {
+      width: 100%; margin-top: 4px; padding: 8px 10px; border-radius: 6px;
+      border: 1px solid #1e2d44; background: #09101b; color: #fff; box-sizing: border-box;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .col { flex: 1 1 220px; }
+    button {
+      margin-top: 12px; background: #00f0b5; color: #04130f; border: 0;
+      padding: 10px 14px; border-radius: 6px; font-weight: 700; cursor: pointer;
+    }
+    pre {
+      background: #060a11; border: 1px solid #1e2d44; padding: 10px;
+      border-radius: 6px; margin-top: 12px; white-space: pre-wrap; word-break: break-word; font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h3>NUVCORE.PCB — Səhifədaxili Layihə &amp; Özünü Genişləndirmə</h3>
+
+    <div class="row">
+      <div class="col">
+        <label>GitHub Owner</label>
+        <input id="ghOwner" value="al-capilot" />
+      </div>
+      <div class="col">
+        <label>GitHub Repo</label>
+        <input id="ghRepo" value="robot" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col">
+        <label>GitHub Token</label>
+        <input id="ghToken" type="password" placeholder="ghp_..." />
+      </div>
+      <div class="col">
+        <label>Gemini API Key</label>
+        <input id="aiKey" type="password" placeholder="AIza..." />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col">
+        <label>Layihə Adı</label>
+        <input id="projectTitle" placeholder="Məs: 1TB Yaddaşlı Robot Log və Xəritə Sistemi" />
+      </div>
+      <div class="col">
+        <label>Yeni Modul Adı (plugins/*.js)</label>
+        <input id="skillName" placeholder="məs: storage_planner" />
+      </div>
+    </div>
+
+    <label>Agentin Yeni Bacarıq Məqsədi / Layihə Tələbi</label>
+    <textarea id="goal" rows="2" placeholder="Məs: 1 TB robot yaddaşı üçün layihə tapşırıqlarını qruplaşdıran və log yazan funksiya yarat"></textarea>
+
+    <button id="runBtn" type="button">Layihə Qur və Özünü Genişləndir</button>
+    <pre id="out">Hazırdır. Açarları daxil edib basın.</pre>
+  </div>
+
+  <script>
+    function byId(id) { return document.getElementById(id); }
+    function out(msg) { byId("out").textContent = msg; }
+
+    function saveLocal() {
+      try {
+        localStorage.setItem("nuv_gh_owner", byId("ghOwner").value.trim());
+        localStorage.setItem("nuv_gh_repo", byId("ghRepo").value.trim());
+        localStorage.setItem("nuv_gh_token", byId("ghToken").value.trim());
+        localStorage.setItem("nuv_ai_key", byId("aiKey").value.trim());
+      } catch (e) {}
+    }
+
+    function loadLocal() {
+      try {
+        if (localStorage.getItem("nuv_gh_owner")) byId("ghOwner").value = localStorage.getItem("nuv_gh_owner");
+        if (localStorage.getItem("nuv_gh_repo")) byId("ghRepo").value = localStorage.getItem("nuv_gh_repo");
+        if (localStorage.getItem("nuv_gh_token")) byId("ghToken").value = localStorage.getItem("nuv_gh_token");
+        if (localStorage.getItem("nuv_ai_key")) byId("aiKey").value = localStorage.getItem("nuv_ai_key");
+      } catch (e) {}
+    }
+
+    function b64ToUtf8(b64) {
+      return decodeURIComponent(escape(atob((b64 || "").replace(/\n/g, ""))));
+    }
+
+    function utf8ToB64(str) {
+      return btoa(unescape(encodeURIComponent(str)));
+    }
+
+    function ghGet(owner, repo, token, path) {
+      var headers = { "Accept": "application/vnd.github+json" };
+      if (token) headers["Authorization"] = "Bearer " + token;
+      return fetch("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + path, { headers: headers })
+        .then(function (r) {
+          if (!r.ok) throw new Error(path + " -> HTTP " + r.status);
+          return r.json();
+        });
+    }
+
+    function ghPut(owner, repo, token, path, contentText, sha, msg) {
+      var body = { message: msg, content: utf8ToB64(contentText) };
+      if (sha) body.sha = sha;
+      return fetch("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + path, {
+        method: "PUT",
+        headers: {
+          "Accept": "application/vnd.github+json",
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      }).then(function (r) {
+        if (!r.ok) throw new Error("PUT " + path + " -> HTTP " + r.status);
+        return r.json();
+      });
+    }
+
+    function askGemini(apiKey, prompt) {
+      var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(apiKey);
+      return fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: "Yalnız təhlükəsiz JavaScript kodu qaytar. Markdown, HTML və izahat yazma." }]
+          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }]
+        })
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error("Gemini HTTP " + r.status);
+          return r.json();
+        })
+        .then(function (j) {
+          var txt = j && j.candidates && j.candidates[0] && j.candidates[0].content &&
+            j.candidates[0].content.parts && j.candidates[0].content.parts[0] && j.candidates[0].content.parts[0].text;
+          if (!txt) throw new Error("Gemini boş cavab qaytardı.");
+          return txt.replace(/^```(?:javascript|js)?\s*/i, "").replace(/\s*```$/i, "").trim();
+        });
+    }
+
+    function checkCodeSafe(code) {
+      var blocked = ["document.", "window.", "localStorage", "sessionStorage", "eval(", "new Function", "fetch(", "XMLHttpRequest", "WebSocket"];
+      var low = String(code || "").toLowerCase();
+      for (var i = 0; i < blocked.length; i++) {
+        if (low.indexOf(blocked[i].toLowerCase()) !== -1) {
+          throw new Error("Bloklanan ifadə: " + blocked[i]);
+        }
+      }
+      new Function("api", code);
+    }
+
+    byId("runBtn").addEventListener("click", function () {
+      saveLocal();
+      var owner = byId("ghOwner").value.trim();
+      var repo = byId("ghRepo").value.trim();
+      var token = byId("ghToken").value.trim();
+      var apiKey = byId("aiKey").value.trim();
+      var projectTitle = byId("projectTitle").value.trim();
+      var skillName = (byId("skillName").value.trim() || "auto_skill")
+        .toLowerCase().replace(/[^a-z0-9_]/g, "_") + ".js";
+      var goal = byId("goal").value.trim();
+
+      if (!owner || !repo || !token || !apiKey || !goal) {
+        return out("Owner, Repo, Token, Gemini API Key və məqsəd mütləqdir.");
+      }
+
+      out("1/3 Yeni modul kodu hazırlanır...");
+      var generatedCode = "";
+
+      askGemini(apiKey, "1 TB yaddaşlı robot üçün modul. Məqsəd: " + goal)
+        .then(function (code) {
+          generatedCode = code;
+          checkCodeSafe(generatedCode);
+          out("2/3 plugins/" + skillName + " GitHub-a yazılır...");
+          return ghGet(owner, repo, token, "plugins/" + skillName)
+            .then(function (d) { return d.sha; })
+            .catch(function () { return null; })
+            .then(function (sha) {
+              return ghPut(owner, repo, token, "plugins/" + skillName, generatedCode, sha, "Self-expand: " + skillName);
+            });
+        })
+        .then(function () {
+          out("3/3 memory/projects.json layihə bazası yenilənir...");
+          return ghGet(owner, repo, token, "memory/projects.json")
+            .then(function (d) {
+              var parsed = JSON.parse(b64ToUtf8(d.content));
+              var list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.projects) ? parsed.projects : []);
+              return { sha: d.sha, list: list };
+            })
+            .catch(function () {
+              return { sha: null, list: [] };
+            });
+        })
+        .then(function (proj) {
+          proj.list.unshift({
+            id: "prj_" + Date.now(),
+            title: projectTitle || goal,
+            plugin: "plugins/" + skillName,
+            storage_tb: 1,
+            status: "in_progress",
+            created_at: new Date().toISOString()
+          });
+          return ghPut(
+            owner,
+            repo,
+            token,
+            "memory/projects.json",
+            JSON.stringify(proj.list, null, 2),
+            proj.sha,
+            "Add project: " + (projectTitle || goal)
+          );
+        })
+        .then(function () {
+          out("TAMAMLANDI!\nModul: plugins/" + skillName + "\nBaza: memory/projects.json (1 TB profili ilə)\n\n--- Yaradılan Kod ---\n" + generatedCode);
+        })
+        .catch(function (err) {
+          out("XƏTA: " + err.message);
+        });
+    });
+
+    loadLocal();
+  </script>
+</body>
+</html>
